@@ -7,7 +7,7 @@ from torch import nn
 
 # noinspection PyTypeChecker,PyUnboundLocalVariable
 class SiamNet(nn.Module):
-    def __init__(self, classes=2, num_inputs=2, output_dim=128, cov_layers=False, device=None):
+    def __init__(self, classes=2, num_inputs=2, output_dim=128, cov_layers=False, device=None, dropout_rate=0.5):
         self.device = device
         super(SiamNet, self).__init__()
 
@@ -55,10 +55,12 @@ class SiamNet(nn.Module):
         self.fc6c = nn.Sequential()
         self.fc6c.add_module('fc7', nn.Linear(256 * 3 * 3, 512))
         self.fc6c.add_module('relu7', nn.ReLU(inplace=True))
+        self.fc6c.add_module('drop7', nn.Dropout(p=dropout_rate))
 
         self.fc7_new = nn.Sequential()
         self.fc7_new.add_module('fc7', nn.Linear(self.num_inputs * 512, self.output_dim))
         self.fc7_new.add_module('relu7', nn.ReLU(inplace=True))
+        self.fc7_new.add_module('drop7', nn.Dropout(p=dropout_rate))
 
         self.classifier_new = nn.Sequential()
         self.classifier_new.add_module('fc8', nn.Linear(self.output_dim, classes))
@@ -75,7 +77,7 @@ class SiamNet(nn.Module):
 
     def load(self, checkpoint):
         model_dict = self.state_dict()
-        pretrained_dict = torch.load(checkpoint)
+        pretrained_dict = torch.load(checkpoint)["model_state_dict"]
         pretrained_dict = {k: v for k, v in list(pretrained_dict.items()) if k in model_dict and 'fc8' not in k}
         model_dict.update(pretrained_dict)
         self.load_state_dict(model_dict)
@@ -163,3 +165,13 @@ class LRN(nn.Module):
 
         x = x.div(div)
         return x
+
+
+if __name__ == "__main__":
+    checkpoint = "C:/Users/Stanley Hua/projects/temporal_hydronephrosis/weights/siam_checkpoint_18.pth"
+
+    pretrained_dict = torch.load(checkpoint)["model_state_dict"]
+    model = SiamNet()
+
+    pre = set(pretrained_dict.keys())
+    curr = set(model.state_dict())

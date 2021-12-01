@@ -1,0 +1,123 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project version="4">
+  <component name="ChangeListManager">
+    <list default="true" id="2e439ead-1cec-4da4-9021-fd0df7818330" name="Changes" comment="">
+      <change afterPath="$PROJECT_DIR$/.gitignore" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/gridSearch.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/../nephronetwork/1.Models/siamese_network/VGGResNetSiameseLSTM.py" beforeDir="false" afterPath="$PROJECT_DIR$/../nephronetwork/1.Models/siamese_network/VGGResNetSiameseLSTM.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/../nephronetwork/1.Models/siamese_network/train_resnet-vgg_lstm.py" beforeDir="false" afterPath="$PROJECT_DIR$/../nephronetwork/1.Models/siamese_network/train_resnet-vgg_lstm.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/../nephronetwork/1.Models/siamese_network/train_siamese_network.py" beforeDir="false" afterPath="$PROJECT_DIR$/../nephronetwork/1.Models/siamese_network/train_siamese_network.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/../nephronetwork/1.Models/siamese_network/train_siamese_network_CV_v3_ST.py" beforeDir="false" afterPath="$PROJECT_DIR$/../nephronetwork/1.Models/siamese_network/train_siamese_network_CV_v3_ST.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/../nephronetwork/1.Models/siamese_network/train_siamese_network_CV_v3_STStanTest.py" beforeDir="false" afterPath="$PROJECT_DIR$/../nephronetwork/1.Models/siamese_network/train_siamese_network_CV_v3_STStanTest.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/../nephronetwork/2.Results/process_results.py" beforeDir="false" afterPath="$PROJECT_DIR$/../nephronetwork/2.Results/process_results.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/.idea/modules.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/modules.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/.idea/temporal_hydronephrosis.iml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/temporal_hydronephrosis.iml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/modelTraining.py" beforeDir="false" afterPath="$PROJECT_DIR$/modelTraining.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/models/baselineSiamese.py" beforeDir="false" afterPath="$PROJECT_DIR$/models/baselineSiamese.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/models/convPooling.py" beforeDir="false" afterPath="$PROJECT_DIR$/models/convPooling.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/results/Siamese_Baseline_2021-11-18_23-56-31/auc.json" beforeDir="false" afterPath="$PROJECT_DIR$/results/Siamese_Baseline_2021-11-18_23-56-31/auc.json" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/results/Siamese_Baseline_2021-11-18_23-56-31/history.csv" beforeDir="false" afterPath="$PROJECT_DIR$/results/Siamese_Baseline_2021-11-18_23-56-31/history.csv" afterDir="false" />
+    </list>
+    <option name="SHOW_DIALOG" value="false" />
+    <option name="HIGHLIGHT_CONFLICTS" value="true" />
+    <option name="HIGHLIGHT_NON_ACTIVE_CHANGELIST" value="false" />
+    <option name="LAST_RESOLUTION" value="IGNORE" />
+  </component>
+  <component name="Git.Settings">
+    <option name="RECENT_GIT_ROOT_PATH" value="$PROJECT_DIR$" />
+  </component>
+  <component name="ProblemsViewState">
+    <option name="selectedIndex" value="2" />
+  </component>
+  <component name="ProjectId" id="21fUAzTLr7EN6xURsuN7aRHA0yh" />
+  <component name="ProjectLevelVcsManager" settingsEditedManually="true" />
+  <component name="ProjectViewState">
+    <option name="foldersAlwaysOnTop" value="false" />
+    <option name="hideEmptyMiddlePackages" value="true" />
+    <option name="showLibraryContents" value="true" />
+    <option name="showMembers" value="true" />
+  </component>
+  <component name="PropertiesComponent">
+    <property name="ASKED_MARK_IGNORED_FILES_AS_EXCLUDED" value="true" />
+    <property name="RunOnceActivity.OpenProjectViewOnStart" value="true" />
+    <property name="RunOnceActivity.ShowReadmeOnStart" value="true" />
+    <property name="last_opened_file_path" value="$PROJECT_DIR$/../nephronetwork" />
+    <property name="run.code.analysis.last.selected.profile" value="aDefault" />
+    <property name="settings.editor.selected.configurable" value="com.jetbrains.python.configuration.PythonContentEntriesConfigurable" />
+  </component>
+  <component name="RunManager" selected="Python.gridSearch">
+    <configuration name="gridSearch" type="PythonConfigurationType" factoryName="Python" temporary="true" nameIsGenerated="true">
+      <module name="temporal_hydronephrosis" />
+      <option name="INTERPRETER_OPTIONS" value="" />
+      <option name="PARENT_ENVS" value="true" />
+      <envs>
+        <env name="PYTHONUNBUFFERED" value="1" />
+      </envs>
+      <option name="SDK_HOME" value="C:\Users\Stanley Hua\Anaconda3\envs\DL\python.exe" />
+      <option name="WORKING_DIRECTORY" value="$PROJECT_DIR$" />
+      <option name="IS_MODULE_SDK" value="false" />
+      <option name="ADD_CONTENT_ROOTS" value="true" />
+      <option name="ADD_SOURCE_ROOTS" value="true" />
+      <option name="SCRIPT_NAME" value="$PROJECT_DIR$/gridSearch.py" />
+      <option name="PARAMETERS" value="" />
+      <option name="SHOW_COMMAND_LINE" value="false" />
+      <option name="EMULATE_TERMINAL" value="false" />
+      <option name="MODULE_MODE" value="false" />
+      <option name="REDIRECT_INPUT" value="false" />
+      <option name="INPUT_FILE" value="" />
+      <method v="2" />
+    </configuration>
+    <configuration name="model_training" type="PythonConfigurationType" factoryName="Python">
+      <module name="temporal_hydronephrosis" />
+      <option name="INTERPRETER_OPTIONS" value="" />
+      <option name="PARENT_ENVS" value="true" />
+      <envs>
+        <env name="PYTHONUNBUFFERED" value="1" />
+      </envs>
+      <option name="SDK_HOME" value="C:\Users\Stanley Hua\Anaconda3\envs\DL\python.exe" />
+      <option name="WORKING_DIRECTORY" value="" />
+      <option name="IS_MODULE_SDK" value="false" />
+      <option name="ADD_CONTENT_ROOTS" value="true" />
+      <option name="ADD_SOURCE_ROOTS" value="true" />
+      <option name="SCRIPT_NAME" value="" />
+      <option name="PARAMETERS" value="" />
+      <option name="SHOW_COMMAND_LINE" value="false" />
+      <option name="EMULATE_TERMINAL" value="false" />
+      <option name="MODULE_MODE" value="false" />
+      <option name="REDIRECT_INPUT" value="false" />
+      <option name="INPUT_FILE" value="" />
+      <method v="2" />
+    </configuration>
+    <list>
+      <item itemvalue="Python.model_training" />
+      <item itemvalue="Python.gridSearch" />
+    </list>
+    <recent_temporary>
+      <list>
+        <item itemvalue="Python.gridSearch" />
+      </list>
+    </recent_temporary>
+  </component>
+  <component name="SpellCheckerSettings" RuntimeDictionaries="0" Folders="0" CustomDictionaries="0" DefaultDictionary="application-level" UseSingleDictionary="true" transferred="true" />
+  <component name="TaskManager">
+    <task active="true" id="Default" summary="Default task">
+      <changelist id="2e439ead-1cec-4da4-9021-fd0df7818330" name="Changes" comment="" />
+      <created>1638331495836</created>
+      <option name="number" value="Default" />
+      <option name="presentableId" value="Default" />
+      <updated>1638331495836</updated>
+    </task>
+    <servers />
+  </component>
+  <component name="Vcs.Log.Tabs.Properties">
+    <option name="TAB_STATES">
+      <map>
+        <entry key="MAIN">
+          <value>
+            <State />
+          </value>
+        </entry>
+      </map>
+    </option>
+  </component>
+</project>

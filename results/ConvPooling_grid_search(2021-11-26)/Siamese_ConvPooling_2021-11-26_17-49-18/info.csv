@@ -1,0 +1,2 @@
+lr,batch_size,adam,momentum,weight_decay,train/test_split,patience,num_epochs,stop_epoch
+0.001,5,True,0.85,0.0005,0.7,20,48,100
