@@ -8,10 +8,6 @@ from glob import glob
 
 import pandas as pd
 
-project_dir = "C:/Users/Stanley Hua/projects/temporal_hydronephrosis/"
-model_type = "ConvPooling"
-keep_best_weights = True
-
 
 class GridSearch:
     timestamp_: str
@@ -37,9 +33,9 @@ class GridSearch:
 
             for folder in temp_folders:
                 shutil.move(folder, self.grid_search_dir)
-        except:
+        except FileNotFoundError:
             pass
-        return [file for file in glob(f"{self.grid_search_dir}/*") if "csv" not in file]
+        return [file for file in glob(f"{self.grid_search_dir}/*") if "csv" not in file and "json" not in file]
 
     @staticmethod
     def findBestEpoch(df):
@@ -60,10 +56,10 @@ class GridSearch:
             kfold_best_val_results = pd.concat(folds_best_val_epoch)
             return kfold_best_val_results
 
-    def findBestPerformingModel(self):
-        """.
-        :param timestamp: timestamp when models were run
-        :return
+    def findBestPerformingModels(self):
+        """
+        @return dataframe containing the best validation set results, where each row corresponds to a tested model 
+                hyperparameters
         """
         result_directories = self.getAllTrainingDirectories()
 
@@ -71,7 +67,7 @@ class GridSearch:
         for dir_ in result_directories:
             # Get epoch for best results and model parameters
             df_results = pd.read_csv(f"{dir_}/history.csv")
-            df_best_epoch = findBestEpoch(df_results)
+            df_best_epoch = self.findBestEpoch(df_results)
             params = pd.read_csv(f"{dir_}/info.csv").iloc[0].to_dict()
 
             # If KFold, average results over all folds. Also, remove all weights or keep best weights if specified (only
@@ -81,19 +77,24 @@ class GridSearch:
                 df_best_epoch = df_best_epoch.mean().to_frame().T
                 df_best_epoch["fold"] = num_fold
                 df_best_epoch["dset"] = "val"
-                removeUnnecessaryWeights(dir_, -10)
+                self.removeUnnecessaryWeights(dir_, -10)
             else:
-                removeUnnecessaryWeights(dir_, df_best_epoch.epoch.iloc[0] if keep_best_weights else -10)
+                self.removeUnnecessaryWeights(dir_, df_best_epoch.epoch.iloc[0] if keep_best_weights else -10)
 
             for key in params:
                 df_best_epoch[key] = params[key]
             df_best_epoch["dir"] = dir_
-
             df_accum = pd.concat([df_accum, df_best_epoch])
 
         print(df_accum)
 
         return df_accum
+
+    def saveBestParameters(self, df):
+        """Given dataframe where each row is a model run, extract the best performing model based on the validation set
+        and save hyperparameters."""
+        df["sum_auc"] = df["auc"] + df["auprc"]
+        df[df.sum_auc == df.sum_auc.max()].iloc[0].to_json(f"{self.grid_search_dir}/best_parameters.json")
 
     @staticmethod
     def removeUnnecessaryWeights(directory, best_epoch=-10):
@@ -111,52 +112,66 @@ class GridSearch:
                 if i not in [closest_epoch_index - j for j in [-1, 0, 1]]:
                     os.remove(all_weights_paths[i])
 
-    def perform_grid_search(self,
-                            lrs: list,
-                            batch_sizes: list,
-                            momentums: list,
-                            adams: list,
-                            num_epochs: int):
+    @staticmethod
+    def perform_grid_search(lrs_: list,
+                            batch_sizes_: list,
+                            momentums_: list,
+                            adams_: list,
+                            num_epochs_: int):
         """
         Performs grid search on given specified parameter lists.
-        :param lrs: learning rates to test
-        :param batch_sizes: batch sizes to test
-        :param momentums: SGD momentums to test (if adam is True)
-        :param adams: If contains True, will run adam. If contains False, will run SGD.
-        :param num_epochs: number of epochs
+        @param lrs_: learning rates to test
+        @param batch_sizes_: batch sizes to test
+        @param momentums_: SGD momentums to test (if adam is True)
+        @param adams_: If contains True, will run adam. If contains False, will run SGD.
+        @param num_epochs_: number of epochs
         """
-        for batch_size in batch_sizes:
-            for lr in lrs:
-                for adam in adams:
-                    for momentum in momentums:
-                        if adam and len(momentums) > 1 and momentum in momentums[1:]:
+        for batch_size in batch_sizes_:
+            for lr in lrs_:
+                for adam in adams_:
+                    for momentum in momentums_:
+                        if adam and len(momentums_) > 1 and momentum in momentums_[1:]:
                             continue
 
-                        subprocess.run(f'python "{project_dir}/modelTraining.py" '
+                        subprocess.run(f'python "{project_dir}/model_training.py" '
                                        f"--batch_size {batch_size} "
                                        f"--lr {lr} "
-                                       f"--stop_epoch {num_epochs} "
+                                       f"--stop_epoch {num_epochs_} "
                                        f"--momentum {momentum} "
                                        + (f"--adam" if adam else ""),
                                        shell=True)
 
-        df = findBestPerformingModel(timestamp)
+    def save_grid_search_results(self):
+        df = self.findBestPerformingModels()
+        self.saveBestParameters(df)
         # noinspection PyTypeChecker
         df.to_csv(f"{self.grid_search_dir}/grid_search({self.timestamp}).csv", index=False)
 
 
+def delete_all_weights():
+    for file_name in glob.glob(f"{project_dir}results/*/*/*.pth"):
+        print(file_name)
+        os.remove(file_name)
+
+
 if __name__ == "__main__":
+    # Global variables
+    project_dir = "C:/Users/Stanley Hua/projects/temporal_hydronephrosis/"
+    model_type = "ConvPooling"
+    keep_best_weights = True
+
     timestamp = datetime.now().strftime("%Y-%m-%d")
-    timestamp = "2021-11-26"
     grid_search_dir = f"{project_dir}/results/{model_type}{'_' if (len(model_type) > 0) else ''}grid_search({timestamp})/"
 
     if not os.path.exists(grid_search_dir):
         os.mkdir(grid_search_dir)
 
-    lrs = [0.0001, 0.001]  # 0.00001 0.0001, 0.001
-    batch_sizes = [5]  # 15
-    momentums = [0.85]  # 0.9, 0.95
+    lrs = []  # 0.00001 0.0001, 0.001
+    batch_sizes = [1]  # 6, 12
+    momentums = [0.75, 0.85, 0.95]  # 0.9, 0.95
     adams = [False]
     num_epochs = 100
 
     gridSearch = GridSearch(model_type, timestamp, grid_search_dir)
+    gridSearch.perform_grid_search(lrs, batch_sizes, momentums, adams, num_epochs)
+    gridSearch.save_grid_search_results()
