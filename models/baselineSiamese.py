@@ -63,7 +63,7 @@ class SiamNet(nn.Module):
         # self.fc6b.add_module('relu6_s1', nn.ReLU(inplace=True))
         # self.fc6b.add_module('pool6b_s1', nn.MaxPool2d(kernel_size=3, stride=2))
 
-        # U-NET
+        # TODO: Rename this
         self.uconnect1 = nn.Sequential()
         self.uconnect1.add_module('conv', nn.Conv2d(1024, 256, kernel_size=3, stride=1, padding=1))
         self.uconnect1.add_module('batch', nn.BatchNorm2d(256))

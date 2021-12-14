@@ -4,6 +4,7 @@
 import numpy as np
 import torch
 from torch import nn
+from torch.nn.utils.rnn import pack_padded_sequence, pad_packed_sequence
 
 from models.baselineSiamese import SiamNet
 
@@ -22,22 +23,18 @@ class SiameseLSTM(SiamNet):
         self.insert_where = insert_where
         self.n_lstm_layers = n_lstm_layers
 
-        if bidirectional:
-            self.hidden_dim = hidden_dim * 2
-        else:
-            self.hidden_dim = hidden_dim
+        self.hidden_dim = hidden_dim
 
         # Change FC layers
         if self.insert_where == 0:       # immediately after U-Net
             input_size = 256 * 7 * 7 * 2
-            self.fc6c.fc7 = nn.Linear(hidden_dim, 512)
+            self.fc6c.fc7 = nn.Linear(self.hidden_dim, 512)
         elif self.insert_where == 1:      # after first FC layer
             input_size = 1024
-            self.fc7_new.fc7 = nn.Linear(hidden_dim, self.output_dim)
+            self.fc7_new.fc7 = nn.Linear(self.hidden_dim, self.output_dim)
         else:                                   # right before prediction layer
             input_size = self.output_dim
-            self.classifier_new.fc8 = nn.Linear(hidden_dim if not bidirectional else hidden_dim * 2,
-                                                classes)
+            self.classifier_new.fc8 = nn.Linear(self.hidden_dim, classes)
 
         # LSTM layers
         self.lstm = nn.Sequential()
@@ -53,13 +50,17 @@ class SiameseLSTM(SiamNet):
                                                  num_layers=n_lstm_layers,
                                                  bidirectional=bidirectional))
 
-    def forward(self, x_t):
+    def forward(self, data):
         """Accepts sequence of dual view images. Extracts penultimate layer embeddings for each dual view, then
         uses an LSTM to aggregate spatial features over time.
-        """
-        return self.embed_after_fc7_new(x_t)
 
-    def embed_after_fc7_new(self, x_t):
+        @param x_t: tuple containing x_t, and length of each sequence in x_t
+        @param x_lens:
+        """
+        x_t, x_lengths = data
+        return self.embed_after_fc7_new(x_t, x_lengths)
+
+    def embed_after_fc7_new(self, x_t, x_lengths):
         """Alternative forward pass. LSTM placed after fc7_new layer"""
         t_embeddings = []
 
@@ -99,11 +100,19 @@ class SiameseLSTM(SiamNet):
             x = self.fc7_new(x.view(B, -1))
             t_embeddings.append(x)
 
+        # Stack image embeddings for each item in sequence. Then pack to remove padding
         x = torch.stack(t_embeddings)
-        # LSTM
-        lstm_out, _ = self.lstm(x)
+        x = pack_padded_sequence(x, x_lengths, batch_first=True, enforce_sorted=False)
 
-        pred = self.classifier_new(lstm_out[:, -1, :].view([x_t.size()[0], -1]))
+        # LSTM
+        lstm_out, (h_f, _) = self.lstm(x)
+
+        # Unpack sequence
+        # lstm_out, _ = torch.nn.utils.rnn.pad_packed_sequence(lstm_out, batch_first=True)
+        # print("Last padded LSTM output", lstm_out[:, -1, :].view([x_t.size()[0], -1]).size())
+
+        # Use last hidden state
+        pred = self.classifier_new(h_f[-1])
         return pred
 
     # TODO: Do this

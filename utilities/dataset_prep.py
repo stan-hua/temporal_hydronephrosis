@@ -7,6 +7,7 @@ import numpy as np
 import torch
 from sklearn.model_selection import StratifiedKFold
 from torch.nn.utils.rnn import pad_sequence
+from torch.utils.data import DataLoader, WeightedRandomSampler
 
 
 class KidneyDataset(torch.utils.data.Dataset):
@@ -40,7 +41,7 @@ def pad_collate(batch):
     @returns tuple containing (padded X, y, cov and length of each sequence in batch)
     """
     (x_t, y_t, cov_t) = zip(*batch)
-    seq_lens = [len(x) for x in x_t]
+    x_lens = [len(x) for x in x_t]
 
     x_pad = pad_sequence(x_t, batch_first=True, padding_value=0)
 
@@ -63,7 +64,7 @@ def pad_collate(batch):
             cov_new.extend([""] * abs(len(cov) - max(x_lens)))
         cov_pad.append(cov_new)
 
-    return x_pad, y_pad, cov_pad, seq_lens
+    return (x_pad, np.array(x_lens)), y_pad, cov_pad
 
 
 def prepare_data_into_sequences(X_train, y_train, cov_train,
@@ -189,3 +190,34 @@ def make_validation_set(X_train, y_train, cov_train, cv=False, num_folds=5):
         return ((X_train[train_index], y_train[train_index], cov_train[train_index],
                  X_train[test_index], y_train[test_index], cov_train[test_index]) for train_index, test_index in
                 skf.split(X_train, y_train))
+
+
+def create_data_loaders(X_train, y_train, cov_train, X_val, y_val, cov_val, X_test, y_test, cov_test,
+                        args,
+                        params, val_test_params):
+    # Datasets
+    training_set = KidneyDataset(X_train, y_train, cov_train)
+    val_set = KidneyDataset(X_val, y_val, cov_val) if (X_val is not None) else None
+    test_set = KidneyDataset(X_test, y_test, cov_test)
+
+    # Weighted sampling
+    if args.balance_classes:
+        samples_weight = torch.from_numpy(training_set.get_class_proportions())
+        print(samples_weight)
+        sampler = WeightedRandomSampler(torch.DoubleTensor(samples_weight), len(training_set))
+        params["shuffle"] = False
+        params["sampler"] = sampler
+
+    # Data Loaders
+    training_generator = DataLoader(training_set,
+                                    collate_fn=pad_collate if args.standardize_seq_length else None,
+                                    **params)
+    val_generator = DataLoader(val_set,
+                               collate_fn=pad_collate if args.standardize_seq_length else None,
+                               **val_test_params) if (X_val is not None) else None
+
+    test_generator = DataLoader(test_set,
+                                collate_fn=pad_collate if args.standardize_seq_length else None,
+                                **val_test_params)
+
+    return training_generator, val_generator, test_generator

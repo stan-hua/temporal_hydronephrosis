@@ -40,6 +40,9 @@ class GridSearch:
     @staticmethod
     def findBestEpoch(df):
         """Returns filtered dataframe for epochs with best validation set AUPRC."""
+        # Require best performing epoch be the 10th epoch or later
+        df = df[df.epoch >= 10]
+
         if df.fold.nunique() == 1:
             df_val = df[df.dset == "val"]
             best_val_auprc = df_val["auprc"].max()
@@ -130,9 +133,6 @@ class GridSearch:
             for lr in lrs_:
                 for adam in adams_:
                     for momentum in momentums_:
-                        if adam and len(momentums_) > 1 and momentum in momentums_[1:]:
-                            continue
-
                         subprocess.run(f'python "{project_dir}/model_training.py" '
                                        f"--batch_size {batch_size} "
                                        f"--lr {lr} "
@@ -157,19 +157,20 @@ def delete_all_weights():
 if __name__ == "__main__":
     # Global variables
     project_dir = "C:/Users/Stanley Hua/projects/temporal_hydronephrosis/"
-    model_type = "ConvPooling"
-    keep_best_weights = True
+    model_type = "LSTM"
+    keep_best_weights = False
 
     timestamp = datetime.now().strftime("%Y-%m-%d")
+    timestamp = '2021-12-11'
     grid_search_dir = f"{project_dir}/results/{model_type}{'_' if (len(model_type) > 0) else ''}grid_search({timestamp})/"
 
     if not os.path.exists(grid_search_dir):
         os.mkdir(grid_search_dir)
 
-    lrs = []  # 0.00001 0.0001, 0.001
+    lrs = []  # 0.00001, 0.0001, 0.001
     batch_sizes = [1]  # 6, 12
-    momentums = [0.75, 0.85, 0.95]  # 0.9, 0.95
-    adams = [False]
+    momentums = [0.85, 0.95]  # 0.9, 0.95
+    adams = [True]
     num_epochs = 100
 
     gridSearch = GridSearch(model_type, timestamp, grid_search_dir)

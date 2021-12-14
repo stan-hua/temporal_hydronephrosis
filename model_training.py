@@ -1,40 +1,38 @@
-from datetime import datetime
-import os
-import sys
 import argparse
 import json
-import warnings
+import os
 import shutil
-
-from sklearn.utils import shuffle
+import sys
+import warnings
+from datetime import datetime
 
 import numpy as np
 import pandas as pd
-
 import torch
 import torch.nn.functional as F
-from torch.utils.data import DataLoader, WeightedRandomSampler
+from sklearn.utils import shuffle
 from torch.autograd import Variable
 
 from models.baselineSiamese import SiamNet
 from models.convPooling import SiamNetConvPooling
 from models.lstm import SiameseLSTM
-from utilities.dataset_prep import KidneyDataset, pad_collate, prepare_data_into_sequences, make_validation_set
-from utilities.results import Results
 from utilities.data_visualizer import plot_loss
+from utilities.dataset_prep import prepare_data_into_sequences, make_validation_set, create_data_loaders
+from utilities.results import Results
 
 warnings.filterwarnings('ignore')
 
 SEED = 42
 # model_name = "Siamese_Baseline"
-model_name = "Siamese_Baseline_ensemble"
+# model_name = "Siamese_Baseline_ensemble"
 # model_name = "Siamese_ConvPooling"
 # model_name = "Siamese_ConvPooling_pretrained"
-# model_name = "Siamese_LSTM"
-best_hyperparameters_folder = None
+model_name = "Siamese_LSTM"
 
 project_dir = "C:\\Users\\Stanley Hua\\projects\\temporal_hydronephrosis\\"
 results_dir = f"{project_dir}results\\"
+
+best_hyperparameters_folder = f"{results_dir}LSTM_grid_search(2021-12-11)"
 
 # Paths to save results
 timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
@@ -99,20 +97,20 @@ def modifyArgs(args):
     """Overwrite user-inputted model parameters.
     """
     # Model hyperparameters
-    args.lr = 0.00001
-    args.batch_size = 1
+    # args.lr = 0.0001
+    # args.batch_size = 1
     args.early_stopping_patience = 20
     args.save_frequency = 100  # Save weights every x epochs
 
     # Data parameters
-    args.standardize_batch_size = False
+    args.standardize_seq_length = True
     args.single_visit = False
     args.single_target = True  # if true, only one label for each example sequence
 
     args.balance_classes = False
 
     # Test set parameters
-    args.test_only = True  # if true, only perform test
+    args.test_only = False  # if true, only perform test
 
     # Validation set parameters
     args.include_validation = not args.test_only and True
@@ -120,11 +118,11 @@ def modifyArgs(args):
     args.num_folds = 5 if args.cv and args.include_validation else 1
 
     # Choose model
-    args.pretrained = True
+    args.pretrained = False
 
-    args.baseline = True
+    args.baseline = False
     args.conv = False
-    args.lstm = False
+    args.lstm = True
     args.vgg_bn = False
 
     args.stgru = False
@@ -132,10 +130,10 @@ def modifyArgs(args):
 
 
 def load_hyperparameters(hyperparameters: dict, path: str):
-    """Load in previously found best hyperparameters and update <hyperparameters>.
+    """Load in previously found the best hyperparameters and update <hyperparameters> in-place.
 
-    :param hyperparameters: existing dictionary of model hyperparameters
-    :param path: path to grid search directory containing old hyperparameters stored in json
+    @param hyperparameters: existing dictionary of model hyperparameters
+    @param path: path to grid search directory containing old hyperparameters stored in json
     """
     if path is not None and os.path.exists(f"{path}/best_parameters.json"):
         with open(f"{path}/best_parameters.json", "r") as param_file:
@@ -143,6 +141,7 @@ def load_hyperparameters(hyperparameters: dict, path: str):
         old_params = {k: v for k, v in list(old_params.items()) if k in hyperparameters}
         hyperparameters.update(old_params)
         print("Previous hyperparameters loaded successfully!")
+        print(hyperparameters)
 
 
 def choose_model(args):
@@ -168,6 +167,7 @@ def choose_model(args):
     elif args.lstm:
         model = SiameseLSTM(output_dim=256, batch_size=args.batch_size,
                             bidirectional=True,
+                            hidden_dim=128,
                             n_lstm_layers=1)
         return model.to(device)
 
@@ -198,16 +198,17 @@ def choose_model(args):
 def train(args, X_train, y_train, cov_train, X_test, y_test, cov_test, X_val=None, y_val=(), cov_val=(), fold=0):
     global best_hyperparameters_folder
 
-    # Create model and hyperparameters. Load in best hyperparameters if available
+    # Create model and hyperparameters. Load in the best hyperparameters if available
     net = choose_model(args)
     hyperparams = {'lr': args.lr, "batch_size": args.batch_size,
                    'adam': args.adam,
                    'momentum': args.momentum,
                    'weight_decay': args.weight_decay, 'train/test_split': args.split,
                    'patience': args.early_stopping_patience,
-                   'num_epochs': args.epochs, 'stop_epoch': args.stop_epoch
+                   'num_epochs': args.epochs, 'stop_epoch': args.stop_epoch,
+                   'balance_classes': args.balance_classes
                    }
-    # load_hyperparameters(hyperparams, best_hyperparameters_folder)
+    load_hyperparameters(hyperparams, best_hyperparameters_folder)
 
     if args.adam:
         optimizer = torch.optim.Adam(net.parameters(), lr=hyperparams['lr'],
@@ -227,30 +228,9 @@ def train(args, X_train, y_train, cov_train, X_test, y_test, cov_test, X_val=Non
     X_train, y_train, cov_train = shuffle(X_train, y_train, cov_train, random_state=SEED)
 
     # Datasets
-    training_set = KidneyDataset(X_train, y_train, cov_train)
-    val_set = KidneyDataset(X_val, y_val, cov_val) if (X_val is not None) else None
-    test_set = KidneyDataset(X_test, y_test, cov_test)
-
-    # Weighted sampling
-    if args.balance_classes:
-        samples_weight = torch.from_numpy(training_set.get_class_proportions())
-        print(samples_weight)
-        sampler = WeightedRandomSampler(torch.DoubleTensor(samples_weight), len(training_set))
-        params["shuffle"] = False
-        params["sampler"] = sampler
-
-    # Data Loaders
-    training_generator = DataLoader(training_set,
-                                    collate_fn=pad_collate if args.standardize_batch_size else None,
-                                    **params)
-    val_generator = DataLoader(val_set,
-                               collate_fn=pad_collate if args.standardize_batch_size else None,
-                               **val_test_params) if (X_val is not None) else None
-
-    test_generator = DataLoader(test_set,
-                                collate_fn=pad_collate if args.standardize_batch_size else None,
-                                **val_test_params)
-
+    training_generator, val_generator, test_generator = create_data_loaders(X_train, y_train, cov_train, X_val, y_val,
+                                                                            cov_val, X_test, y_test, cov_test,
+                                                                            args, params, val_test_params)
     print("Dataset generated")
 
     # Results accumulator
@@ -271,7 +251,15 @@ def train(args, X_train, y_train, cov_train, X_test, y_test, cov_test, X_val=Non
             net.train()
             for batch_idx, (data, target, cov) in enumerate(training_generator):
                 optimizer.zero_grad()
-                output = net(data.to(device))
+
+                # if sequence length is standardized, <data> is a tuple of data, sequence lengths
+                if args.standardize_seq_length:
+                    x = data[0].to(device)
+                    x_lengths = torch.from_numpy(data[1])
+                    data = (x, x_lengths)
+                    output = net(data)
+                else:
+                    output = net(data.to(device))
 
                 target = torch.tensor(target)
                 target = Variable(target.type(torch.LongTensor), requires_grad=False).to(device)
@@ -302,7 +290,13 @@ def train(args, X_train, y_train, cov_train, X_test, y_test, cov_test, X_val=Non
                     for batch_idx, (data, target, cov) in enumerate(val_generator):
                         net.zero_grad()
                         optimizer.zero_grad()
-                        output = net(data.to(device))
+
+                        # if sequence length is standardized, <data> is a tuple of data, sequence lengths
+                        if args.standardize_seq_length:
+                            data = data[0].to(device), data[1]
+                            output = net(data)
+                        else:
+                            output = net(data.to(device))
                         target = torch.tensor(target)
                         target = target.type(torch.LongTensor).to(device)
                         loss = F.cross_entropy(output, target)
@@ -320,7 +314,9 @@ def train(args, X_train, y_train, cov_train, X_test, y_test, cov_test, X_val=Non
                         res.all_patient_ID_val.append(cov)
 
             # Save results every epoch
-            res.process_results(epoch, ["train", "val"] if X_val is not None else ["train"], y_train, y_val, y_test)
+            res.process_results(epoch,
+                                ["train", "val"] if X_val is not None else ["train"],
+                                y_train, y_val, y_test)
 
         # Save model and optimizer weights
         if epoch % args.save_frequency == 0:
@@ -341,7 +337,13 @@ def train(args, X_train, y_train, cov_train, X_test, y_test, cov_test, X_val=Non
             for batch_idx, (data, target, cov) in enumerate(test_generator):
                 net.zero_grad()
                 optimizer.zero_grad()
-                output = net(data.to(device))
+
+                # if sequence length is standardized, <data> is a tuple of data, sequence lengths
+                if args.standardize_seq_length:
+                    data = data[0].to(device), data[1]
+                    output = net(data)
+                else:
+                    output = net(data.to(device))
                 target = torch.tensor(target)
                 target = target.type(torch.LongTensor).to(device)
                 loss = F.cross_entropy(output, target)
@@ -419,7 +421,7 @@ def main():
                                                                                         X_test, y_test, cov_test,
                                                                                         single_visit=args.single_visit,
                                                                                         single_target=args.single_target,
-                                                                                        fix_seq_length=args.standardize_batch_size
+                                                                                        fix_seq_length=args.standardize_seq_length
                                                                                         )
     # Split into train-validation sets
     if args.include_validation:
@@ -447,7 +449,9 @@ def main():
 
         if not args.test_only:
             plot_loss(curr_results_dir)
-    except:
+    except Exception as e:
+        # If exception occurs, print stack trace and remove results directory.
+        print(e)
         shutil.rmtree(curr_results_dir)
 
 
