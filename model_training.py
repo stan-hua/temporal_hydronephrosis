@@ -27,7 +27,7 @@ SEED = 42
 # model_name = "Siamese_Baseline_ensemble"
 # model_name = "Siamese_ConvPooling"
 # model_name = "Siamese_ConvPooling_pretrained"
-model_name = "Siamese_LSTM"
+model_name = ""
 
 project_dir = "C:\\Users\\Stanley Hua\\projects\\temporal_hydronephrosis\\"
 results_dir = f"{project_dir}results\\"
@@ -81,15 +81,25 @@ def parseArgs():
     parser.add_argument("--etiology", default="B", help="O (obstruction), R (reflux), B (both)")
     parser.add_argument('--cv', action='store_true', help="Flag to run cross validation")
     parser.add_argument('--adam', action="store_true", help="Use Adam optimizer instead of SGD")
-    parser.add_argument('--vgg', action='store_true', help="Run VGG16 architecture, not using this flag runs ResNet")
-    parser.add_argument('--vgg_bn', action='store_true', help="Run VGG16 batch norm architecture")
-    parser.add_argument('--densenet', action='store_true', help="Run DenseNet")
-    parser.add_argument('--resnet18', action='store_true',
-                        help="Run ResNet18 architecture, not using this flag runs ResNet16")
-    parser.add_argument('--resnet50', action='store_true',
-                        help="Run ResNet50 architecture, not using this flag runs ResNet50")
+
+    # Unused arguments
+    # parser.add_argument('--vgg', action='store_true', help="Run VGG16 architecture, not using this flag runs ResNet")
+    # parser.add_argument('--vgg_bn', action='store_true', help="Run VGG16 batch norm architecture")
+    # parser.add_argument('--densenet', action='store_true', help="Run DenseNet")
+    # parser.add_argument('--resnet18', action='store_true',
+    #                     help="Run ResNet18 architecture, not using this flag runs ResNet16")
+    # parser.add_argument('--resnet50', action='store_true',
+    #                     help="Run ResNet50 architecture, not using this flag runs ResNet50")
     parser.add_argument('--pretrained', action="store_true",
                         help="Use pretrained model with cross validation if cv requested")
+
+    # Newly added arguments
+    parser.add_argument("--model", default="baseline",
+                        help="Choose model to run from the following: (baseline, conv_pool, lstm, tsm, stgru)")
+    parser.add_argument("--early_stopping_patience", default=100, type=int,
+                        help="If validation set specified, determine patience (num. of epochs) to allow stagnant "
+                             "validation loss before stopping.")
+    parser.add_argument("--save_frequency", default=100, type=int, help="Save model weights every <x> epochs")
     return parser.parse_args()
 
 
@@ -99,13 +109,31 @@ def modifyArgs(args):
     # Model hyperparameters
     # args.lr = 0.0001
     # args.batch_size = 1
-    args.early_stopping_patience = 20
+    global model_name
+    args.early_stopping_patience = 100
     args.save_frequency = 100  # Save weights every x epochs
 
+    # Choose model
+    model_types = ["baseline", "conv_pool", "lstm", "tsm", "stgru"]
+    args.model = model_types[0]
+
+    if args.model == "baseline":
+        model_name = "Siamese_Baseline"
+    elif args.model == "conv_pool":
+        model_name = "Siamese_ConvPooling"
+    else:
+        model_name = f"Siamese_{args.model.upper()}"
+
+    assert args.model in model_types
+
+    # Pretrained?
+    args.pretrained = False
+
     # Data parameters
-    args.standardize_seq_length = True
-    args.single_visit = False
-    args.single_target = True  # if true, only one label for each example sequence
+    if args.model == model_types[0]:    # for single-visit models
+        args.standardize_seq_length, args.single_visit, args.single_target = False, True, False
+    else:                               # for multiple-visit models
+        args.standardize_seq_length, args.single_visit, args.single_target = True, False, True
 
     args.balance_classes = False
 
@@ -115,18 +143,7 @@ def modifyArgs(args):
     # Validation set parameters
     args.include_validation = not args.test_only and True
     args.cv = args.include_validation and True
-    args.num_folds = 5 if args.cv and args.include_validation else 1
-
-    # Choose model
-    args.pretrained = False
-
-    args.baseline = False
-    args.conv = False
-    args.lstm = True
-    args.vgg_bn = False
-
-    args.stgru = False
-    args.tsm = False
+    args.num_folds = 5 if (args.cv and args.include_validation) else 1
 
 
 def load_hyperparameters(hyperparameters: dict, path: str):
@@ -149,57 +166,53 @@ def choose_model(args):
 
     old_checkpoint = f"{project_dir}/weights/siam_checkpoint_18.pth"
 
-    if args.baseline:
-        model_name = "Siamese_Baseline"
-
-        model = SiamNet(output_dim=256)
-        if args.pretrained:
-            model.load(old_checkpoint)
-        return model.to(device)
-    elif args.conv:
+    if args.model == "conv_pool":
         model_name = "Siamese_ConvPooling"
-        best_hyperparameters_folder = f"{results_dir}/ConvPooling_grid_search(2021-12-02)"
-
         model = SiamNetConvPooling(output_dim=256)
-        if args.pretrained:
-            model.load(old_checkpoint)
-        return model.to(device)
-    elif args.lstm:
+    elif args.model == "lstm":
+        model_name = "Siamese_LSTM"
         model = SiameseLSTM(output_dim=256, batch_size=args.batch_size,
                             bidirectional=True,
                             hidden_dim=128,
                             n_lstm_layers=1)
-        return model.to(device)
+    elif args.model == "tsm":
+        model_name = "Siamese_TSM"
+        # TODO: Implement this
+        raise NotImplementedError("TSM has not yet been implemented!")
+    elif args.model == "stgru":
+        model_name = "Siamese_STGRU"
+        # TODO: Implement this
+        raise NotImplementedError("STGRU has not yet been implemented!")
+    else:  # baseline single-visit
+        model_name = "Siamese_Baseline"
+        model = SiamNet(output_dim=256)
 
-    # Legacy Code
-    sys.path.insert(0, args.git_dir + '/nephronetwork/1.Models/siamese_network/')
-    from VGGResNetSiameseLSTM import SiameseCNNLstm
-    if args.densenet:
-        print("importing SiameseCNNLstm densenet")
-        return SiameseCNNLstm("densenet").to(device)
-    elif args.resnet18:
-        print("importing SiameseCNNLstm resnet18")
-        return SiameseCNNLstm("resnet18").to(device)
-    elif args.resnet50:
-        print("importing SiameseCNNLstm resnet50")
-        return SiameseCNNLstm("resnet50").to(device)
-    elif args.vgg:
-        print("importing SiameseCNNLstm vgg")
-        return SiameseCNNLstm("vgg").to(device)
-    elif args.vgg_bn:
-        print("importing SiameseCNNLstm vgg_bn")
-        return SiameseCNNLstm("vgg_bn").to(device)
-    elif args.customnet:
-        print("importing SiameseCNNLstm customNet")
-        return SiameseCNNLstm("custom").to(device)
+    # Load weights
+    if args.pretrained:
+        model.load(old_checkpoint)
+    return model.to(device)
+
+
+def init_weights(m):
+    """Perform Kaiming (zero-mean) initialization for conv and linear layers."""
+    if not isinstance(m, torch.nn.Linear) and not isinstance(m, torch.nn.Conv2d):
+        return
+
+    torch.nn.init.kaiming_normal_(m.weight, mode='fan_out', nonlinearity='relu')
+    # torch.nn.init.xavier_uniform(m.weight)
+    m.bias.data.fill_(0.01)
 
 
 # Training
 def train(args, X_train, y_train, cov_train, X_test, y_test, cov_test, X_val=None, y_val=(), cov_val=(), fold=0):
     global best_hyperparameters_folder
 
-    # Create model and hyperparameters. Load in the best hyperparameters if available
+    # Create model. Initialize weights
     net = choose_model(args)
+    net.zero_grad()
+    net.apply(init_weights)
+
+    # Save/Load in the best hyperparameters if available
     hyperparams = {'lr': args.lr, "batch_size": args.batch_size,
                    'adam': args.adam,
                    'momentum': args.momentum,

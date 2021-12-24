@@ -38,29 +38,20 @@ class GridSearch:
         return [file for file in glob(f"{self.grid_search_dir}/*") if "csv" not in file and "json" not in file]
 
     @staticmethod
-    def findBestEpoch(df):
-        """Returns filtered dataframe for epochs with best validation set AUPRC."""
-        # Require best performing epoch be the 10th epoch or later
-        df = df[df.epoch >= 10]
+    def findBestEpoch(df, metric="loss"):
+        """Returns epoch with validation with minimum <metric> value. If cross-fold validation, first average over
+        folds
+        """
+        df_val = df[df.dset == "val"]
+        df_mean_val = df_val.groupby(by=["epoch"]).mean()
+        df_best_epoch = df_mean_val[df_mean_val[metric] == min(df_mean_val[metric])]
+        df_best_epoch["dset"] = "val"
 
-        if df.fold.nunique() == 1:
-            df_val = df[df.dset == "val"]
-            best_val_auprc = df_val["auprc"].max()
-            best_val_epoch = df_val[df_val.auprc == best_val_auprc]
-
-            return best_val_epoch
-        else:
-            folds_best_val_epoch = []
-            for fold in df.fold.unique().tolist():
-                df_ = df[df.fold == fold]
-                df_val = df_[df_.dset == "val"]
-                best_val_auprc = df_val["auprc"].max()
-                folds_best_val_epoch.append(df_val[df_val.auprc == best_val_auprc])
-            kfold_best_val_results = pd.concat(folds_best_val_epoch)
-            return kfold_best_val_results
+        return df_best_epoch
 
     def findBestPerformingModels(self):
-        """
+        """If cross-fold validation done, average over epochs. Get row with the lowest validation loss.
+
         @return dataframe containing the best validation set results, where each row corresponds to a tested model 
                 hyperparameters
         """
@@ -70,20 +61,11 @@ class GridSearch:
         for dir_ in result_directories:
             # Get epoch for best results and model parameters
             df_results = pd.read_csv(f"{dir_}/history.csv")
-            df_best_epoch = self.findBestEpoch(df_results)
+            df_best_epoch = self.findBestEpoch(df_results, "loss")
+            self.removeUnnecessaryWeights(dir_, df_best_epoch.epoch.iloc[0] if keep_best_weights else -10)
+
+            # Add in parameters
             params = pd.read_csv(f"{dir_}/info.csv").iloc[0].to_dict()
-
-            # If KFold, average results over all folds. Also, remove all weights or keep best weights if specified (only
-            # for train-val split).
-            if len(df_best_epoch) > 1:
-                num_fold = len(df_best_epoch)
-                df_best_epoch = df_best_epoch.mean().to_frame().T
-                df_best_epoch["fold"] = num_fold
-                df_best_epoch["dset"] = "val"
-                self.removeUnnecessaryWeights(dir_, -10)
-            else:
-                self.removeUnnecessaryWeights(dir_, df_best_epoch.epoch.iloc[0] if keep_best_weights else -10)
-
             for key in params:
                 df_best_epoch[key] = params[key]
             df_best_epoch["dir"] = dir_
@@ -96,7 +78,6 @@ class GridSearch:
     def saveBestParameters(self, df):
         """Given dataframe where each row is a model run, extract the best performing model based on the validation set
         and save hyperparameters."""
-        df["sum_auc"] = df["auc"] + df["auprc"]
         df[df.sum_auc == df.sum_auc.max()].iloc[0].to_json(f"{self.grid_search_dir}/best_parameters.json")
 
     @staticmethod
@@ -161,7 +142,6 @@ if __name__ == "__main__":
     keep_best_weights = False
 
     timestamp = datetime.now().strftime("%Y-%m-%d")
-    timestamp = '2021-12-11'
     grid_search_dir = f"{project_dir}/results/{model_type}{'_' if (len(model_type) > 0) else ''}grid_search({timestamp})/"
 
     if not os.path.exists(grid_search_dir):

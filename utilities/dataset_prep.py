@@ -12,9 +12,7 @@ from torch.utils.data import DataLoader, WeightedRandomSampler
 
 class KidneyDataset(torch.utils.data.Dataset):
     def __init__(self, X, y, cov):
-        # self.X = [torch.tensor(e, requires_grad=True).float() for e in X]
         self.X = [torch.from_numpy(e).float() for e in X]
-        # self.X = torch.from_numpy(X).float()
         self.y = y
         self.cov = cov
 
@@ -152,6 +150,7 @@ def prepare_data_into_sequences(X_train, y_train, cov_train,
             y_test = np.array([seq[-1] for seq in y_test])
 
         if fix_seq_length:
+            # TODO: Remove this code
             pass
             # X_train, y_train, cov_train = standardize_seq_length(X_train, y_train, cov_train)
             # X_test, y_test, cov_test = standardize_seq_length(X_test, y_test, cov_test)
@@ -221,3 +220,4 @@ def create_data_loaders(X_train, y_train, cov_train, X_val, y_val, cov_val, X_te
                                 **val_test_params)
 
     return training_generator, val_generator, test_generator
+
