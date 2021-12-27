@@ -5,6 +5,7 @@ import shutil
 import sys
 import warnings
 from datetime import datetime
+from functools import partial
 
 import numpy as np
 import pandas as pd
@@ -17,7 +18,7 @@ from models.baselineSiamese import SiamNet
 from models.convPooling import SiamNetConvPooling
 from models.lstm import SiameseLSTM
 from utilities.data_visualizer import plot_loss
-from utilities.dataset_prep import prepare_data_into_sequences, make_validation_set, create_data_loaders
+from utilities.dataset_prep import prepare_data_into_sequences, make_validation_set, create_data_loaders, parse_cov, remove_unnecessary_cov
 from utilities.results import Results
 
 warnings.filterwarnings('ignore')
@@ -40,6 +41,7 @@ curr_results_dir = f"{results_dir}{model_name}_{timestamp}/"
 training_info_path = f"{curr_results_dir}info.csv"
 auc_path = f"{curr_results_dir}auc.json"
 results_summary_path = f"{curr_results_dir}history.csv"
+
 
 # Set the random seed manually for reproducibility. Set other torch-related variables.
 np.random.seed(SEED)
@@ -100,18 +102,23 @@ def parseArgs():
                         help="If validation set specified, determine patience (num. of epochs) to allow stagnant "
                              "validation loss before stopping.")
     parser.add_argument("--save_frequency", default=100, type=int, help="Save model weights every <x> epochs")
+    parser.add_argument("--include_cov", action="store_true", help="Include covariates in model.")
     return parser.parse_args()
 
 
 def modifyArgs(args):
     """Overwrite user-inputted model parameters.
     """
-    # Model hyperparameters
-    # args.lr = 0.0001
-    # args.batch_size = 1
     global model_name
+
+    # Model hyperparameters
+    # args.lr = 0.00001
+    # args.batch_size = 1
     args.early_stopping_patience = 100
-    args.save_frequency = 100  # Save weights every x epochs
+    args.save_frequency = 100           # Save weights every x epochs
+    args.include_cov = True
+    args.load_hyperparameters = False
+    args.pretrained = False
 
     # Choose model
     model_types = ["baseline", "conv_pool", "lstm", "tsm", "stgru"]
@@ -126,13 +133,13 @@ def modifyArgs(args):
 
     assert args.model in model_types
 
-    # Pretrained?
-    args.pretrained = False
-
     # Data parameters
-    if args.model == model_types[0]:    # for single-visit models
+    if args.model == model_types[0]:  # for single-visit models
         args.standardize_seq_length, args.single_visit, args.single_target = False, True, False
-    else:                               # for multiple-visit models
+    elif args.model == model_types[1]:
+        args.standardize_seq_length, args.single_visit, args.single_target = False, False, True
+        assert args.batch_size == 1
+    else:  # for multiple-visit models
         args.standardize_seq_length, args.single_visit, args.single_target = True, False, True
 
     args.balance_classes = False
@@ -162,33 +169,30 @@ def load_hyperparameters(hyperparameters: dict, path: str):
 
 
 def choose_model(args):
-    global model_name, best_hyperparameters_folder
+    global curr_results_dir, best_hyperparameters_folder, device
 
-    old_checkpoint = f"{project_dir}/weights/siam_checkpoint_18.pth"
+    # old_checkpoint = f"{project_dir}/weights/siam_checkpoint_18.pth"
 
     if args.model == "conv_pool":
-        model_name = "Siamese_ConvPooling"
-        model = SiamNetConvPooling(output_dim=256)
+        model = SiamNetConvPooling(output_dim=256, device=device, cov_layers=args.include_cov)
     elif args.model == "lstm":
-        model_name = "Siamese_LSTM"
         model = SiameseLSTM(output_dim=256, batch_size=args.batch_size,
                             bidirectional=True,
                             hidden_dim=128,
-                            n_lstm_layers=1)
+                            n_lstm_layers=1,
+                            device=device, cov_layers=args.include_cov)
     elif args.model == "tsm":
-        model_name = "Siamese_TSM"
         # TODO: Implement this
         raise NotImplementedError("TSM has not yet been implemented!")
     elif args.model == "stgru":
-        model_name = "Siamese_STGRU"
         # TODO: Implement this
         raise NotImplementedError("STGRU has not yet been implemented!")
     else:  # baseline single-visit
-        model_name = "Siamese_Baseline"
-        model = SiamNet(output_dim=256)
+        model = SiamNet(output_dim=256, device=device, cov_layers=args.include_cov)
 
     # Load weights
     if args.pretrained:
+        # TODO: Change old_checkpoint
         model.load(old_checkpoint)
     return model.to(device)
 
@@ -203,6 +207,25 @@ def init_weights(m):
     m.bias.data.fill_(0.01)
 
 
+def update_paths(model_type):
+    global curr_results_dir, training_info_path, auc_path, results_dir, results_summary_path, model_name
+    if model_type == "conv_pool":
+        model_name = "Siamese_ConvPooling"
+    elif model_type == "lstm":
+        model_name = "Siamese_LSTM"
+    elif model_type == "tsm":
+        model_name = "Siamese_TSM"
+    elif model_type == "stgru":
+        model_name = "Siamese_STGRU"
+    else:  # baseline single-visit
+        model_name = "Siamese_Baseline"
+
+    curr_results_dir = f"{results_dir}{model_name}_{timestamp}/"
+    training_info_path = f"{curr_results_dir}info.csv"
+    auc_path = f"{curr_results_dir}auc.json"
+    results_summary_path = f"{curr_results_dir}history.csv"
+
+
 # Training
 def train(args, X_train, y_train, cov_train, X_test, y_test, cov_test, X_val=None, y_val=(), cov_val=(), fold=0):
     global best_hyperparameters_folder
@@ -212,7 +235,7 @@ def train(args, X_train, y_train, cov_train, X_test, y_test, cov_test, X_val=Non
     net.zero_grad()
     net.apply(init_weights)
 
-    # Save/Load in the best hyperparameters if available
+    # Save/load in the best hyperparameters if available
     hyperparams = {'lr': args.lr, "batch_size": args.batch_size,
                    'adam': args.adam,
                    'momentum': args.momentum,
@@ -221,7 +244,8 @@ def train(args, X_train, y_train, cov_train, X_test, y_test, cov_test, X_val=Non
                    'num_epochs': args.epochs, 'stop_epoch': args.stop_epoch,
                    'balance_classes': args.balance_classes
                    }
-    load_hyperparameters(hyperparams, best_hyperparameters_folder)
+    if args.load_hyperparameters:
+        load_hyperparameters(hyperparams, best_hyperparameters_folder)
 
     if args.adam:
         optimizer = torch.optim.Adam(net.parameters(), lr=hyperparams['lr'],
@@ -235,7 +259,7 @@ def train(args, X_train, y_train, cov_train, X_test, y_test, cov_test, X_val=Non
 
     # Validation/test set contains batch size of 1 to avoid interference from zero-padding varying sequence length
     val_test_params = params.copy()
-    val_test_params["batch_size"] = 1
+    # val_test_params["batch_size"] = 1     # TODO: Remove this
 
     # Be careful to not shuffle order of image seq within a patient
     X_train, y_train, cov_train = shuffle(X_train, y_train, cov_train, random_state=SEED)
@@ -270,9 +294,14 @@ def train(args, X_train, y_train, cov_train, X_test, y_test, cov_test, X_val=Non
                     x = data[0].to(device)
                     x_lengths = torch.from_numpy(data[1])
                     data = (x, x_lengths)
-                    output = net(data)
                 else:
-                    output = net(data.to(device))
+                    data = data.to(device)
+
+                # if include covariate, pack in tuple
+                if args.include_cov:
+                    data = (data, cov)
+
+                output = net(data)
 
                 target = torch.tensor(target)
                 target = Variable(target.type(torch.LongTensor), requires_grad=False).to(device)
@@ -306,10 +335,17 @@ def train(args, X_train, y_train, cov_train, X_test, y_test, cov_test, X_val=Non
 
                         # if sequence length is standardized, <data> is a tuple of data, sequence lengths
                         if args.standardize_seq_length:
-                            data = data[0].to(device), data[1]
-                            output = net(data)
+                            x = data[0].to(device)
+                            x_lengths = torch.from_numpy(data[1])
+                            data = (x, x_lengths)
                         else:
-                            output = net(data.to(device))
+                            data = data.to(device)
+
+                        # if include covariate, pack in tuple
+                        if args.include_cov:
+                            data = (data, cov)
+
+                        output = net(data)
                         target = torch.tensor(target)
                         target = target.type(torch.LongTensor).to(device)
                         loss = F.cross_entropy(output, target)
@@ -353,10 +389,17 @@ def train(args, X_train, y_train, cov_train, X_test, y_test, cov_test, X_val=Non
 
                 # if sequence length is standardized, <data> is a tuple of data, sequence lengths
                 if args.standardize_seq_length:
-                    data = data[0].to(device), data[1]
-                    output = net(data)
+                    x = data[0].to(device)
+                    x_lengths = torch.from_numpy(data[1])
+                    data = (x, x_lengths)
                 else:
-                    output = net(data.to(device))
+                    data = data.to(device)
+
+                # if include covariate, pack in tuple
+                if args.include_cov:
+                    data = (data, cov)
+
+                output = net(data)
                 target = torch.tensor(target)
                 target = target.type(torch.LongTensor).to(device)
                 loss = F.cross_entropy(output, target)
@@ -407,7 +450,8 @@ def main():
     args = parseArgs()
     modifyArgs(args)
 
-    # Path to data
+    # Paths
+    update_paths(args.model)
     data_path = args.git_dir + "nephronetwork/0.Preprocess/preprocessed_images_20190617.pickle"
 
     # Import modules from git repository
@@ -429,13 +473,23 @@ def main():
         crop=args.crop,
         git_dir=args.git_dir
     )
+
+    # Parse for covariates
+    if isinstance(cov_train, list) and isinstance(cov_test, list):
+        func_parse_cov = partial(parse_cov, age=True, side=True, sex=False)
+        cov_train = list(map(func_parse_cov, cov_train))
+        cov_test = list(map(func_parse_cov, cov_test))
+
     # Prepare data into sequences
     X_train, y_train, cov_train, X_test, y_test, cov_test = prepare_data_into_sequences(X_train, y_train, cov_train,
                                                                                         X_test, y_test, cov_test,
                                                                                         single_visit=args.single_visit,
-                                                                                        single_target=args.single_target,
-                                                                                        fix_seq_length=args.standardize_seq_length
-                                                                                        )
+                                                                                        single_target=args.single_target)
+
+    # Remove ID and imaging date from covariates
+    remove_unnecessary_cov(cov_train)
+    remove_unnecessary_cov(cov_test)
+
     # Split into train-validation sets
     if args.include_validation:
         train_val_generator = make_validation_set(X_train, y_train, cov_train,
@@ -445,7 +499,7 @@ def main():
 
     i = 1
     try:
-        # Create directory for storing results
+        # If folder is non-existent, create folder for storing results
         if not os.path.isdir(curr_results_dir):
             os.makedirs(curr_results_dir)
 

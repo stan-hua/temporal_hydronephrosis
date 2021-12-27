@@ -90,14 +90,11 @@ class SiamNet(nn.Module):
 
     def forward(self, x):
         if self.cov_layers:
-            in_dict = x
-            x = in_dict['img']
+            x, in_dict = x
 
-        # x = x.unsqueeze(0)
         if self.num_inputs == 1:
             x = x.unsqueeze(1)
-        #   B, C, H = x.size()
-        # else:
+
         B, T, C, H = x.size()
         x = x.transpose(0, 1)
         x_list = []
@@ -123,8 +120,8 @@ class SiamNet(nn.Module):
         pred = self.classifier_new(x)
 
         if self.cov_layers:
-            age = in_dict['Age_wks'].type(torch.FloatTensor).to(device).view(B, 1)
-            side = in_dict['Side_L'].type(torch.FloatTensor).to(device).view(B, 1)
+            age = in_dict['Age_wks'].type(torch.FloatTensor).to(self.device).view(B, 1)
+            side = in_dict['Side_L'].type(torch.FloatTensor).to(self.device).view(B, 1)
             mid_in = torch.cat((pred, age, side), 1)
 
             x = self.add_covs1(mid_in)

@@ -155,7 +155,7 @@ class Results:
                              f'{dset}_auprc_thresholds': results['auprc_thresholds'].tolist(), "epoch": self.epoch})
 
             df_dset_results = pd.DataFrame({"epoch": self.epoch, "acc": acc, "loss": loss, "dset": dset,
-                                            "auc": results["auc"],
+                                            "auroc": results["auc"],
                                             "auprc": results["auprc"],
                                             # "tn": results["tn"],
                                             # "fp": results['fp'],

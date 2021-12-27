@@ -138,7 +138,7 @@ def delete_all_weights():
 if __name__ == "__main__":
     # Global variables
     project_dir = "C:/Users/Stanley Hua/projects/temporal_hydronephrosis/"
-    model_type = "LSTM"
+    model_type = "Siamese_Baseline"
     keep_best_weights = False
 
     timestamp = datetime.now().strftime("%Y-%m-%d")
@@ -147,10 +147,10 @@ if __name__ == "__main__":
     if not os.path.exists(grid_search_dir):
         os.mkdir(grid_search_dir)
 
-    lrs = []  # 0.00001, 0.0001, 0.001
-    batch_sizes = [1]  # 6, 12
+    lrs = [0.00001, 0.0001, 0.001]  # 0.00001, 0.0001, 0.001
+    batch_sizes = [1, 64, 128]  # 6, 12
     momentums = [0.85, 0.95]  # 0.9, 0.95
-    adams = [True]
+    adams = [True, False]
     num_epochs = 100
 
     gridSearch = GridSearch(model_type, timestamp, grid_search_dir)

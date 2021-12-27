@@ -14,15 +14,14 @@ class SiamNetConvPooling(SiamNet):
         """Accepts sequence of dual view images. Extracts penultimate layer embeddings for each dual view, then performs
         max pooling over time.
         """
-        t_embeddings = []
+        if self.cov_layers:
+            x_t, in_dict = x_t
 
+        i = 0
+        t_embeddings = []
         for x in x_t:
             if torch.mean(x) == 0:      # stop once hit zero padded image
                 break
-
-            if self.cov_layers:
-                in_dict = x
-                x = in_dict['img']
 
             if self.num_inputs == 1:
                 x = x.unsqueeze(1)
@@ -34,20 +33,15 @@ class SiamNetConvPooling(SiamNet):
                 curr_x = torch.unsqueeze(x[i], 1)
 
                 # Grayscale to RGB
-                curr_x = curr_x.expand(-1, 1, -1, -1)
+                curr_x = curr_x.expand(-1, 3, -1, -1)
                 if torch.cuda.is_available():
                     input_ = torch.cuda.FloatTensor(curr_x.to(self.device))
                 else:
                     input_ = torch.FloatTensor(curr_x.to(self.device))
-                out1 = self.conv1(input_)
-                out2 = self.conv2(out1)
-                out3 = self.conv3(out2)
-                out4 = self.conv4(out3)
-                out5 = self.conv5(out4)
-                out6 = self.fc6(out5)
-                unet1 = self.uconnect1(out6)
-
-                z = unet1.view([B, 1, -1])
+                z = self.conv(input_)
+                z = self.fc6(z)
+                z = self.fc6b(z)
+                z = z.view([B, 1, -1])
                 z = self.fc6c(z)
                 z = z.view([B, 1, -1])
                 x_list.append(z)
@@ -61,11 +55,7 @@ class SiamNetConvPooling(SiamNet):
 
         if self.cov_layers:
             age = in_dict['Age_wks'].type(torch.FloatTensor).to(device).view(B, 1)
-            # print("Age: ")
-            # print(age)
             side = in_dict['Side_L'].type(torch.FloatTensor).to(device).view(B, 1)
-            # print("Side: ")
-            # print(side)
             mid_in = torch.cat((pred, age, side), 1)
 
             x = self.add_covs1(mid_in)

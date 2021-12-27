@@ -1,6 +1,7 @@
 import sys
 import json
 from collections import defaultdict
+from functools import partial
 
 import matplotlib
 import matplotlib.pyplot as plt
@@ -8,6 +9,8 @@ import seaborn as sns
 
 import numpy as np
 import pandas as pd
+
+from utilities.dataset_prep import prepare_data_into_sequences, parse_cov
 
 matplotlib.use("Qt5Agg")
 
@@ -69,127 +72,28 @@ class DataViewer:
         """Returns proportion of samples that are positive."""
         return self.df["y"].mean()
 
-    def preprocess_covariates(self):
-        """Preprocess covariates and update dataframe."""
-        gender = self.df_train['cov'].map(lambda lst: [i.split("_")[2] for i in lst][0])
-        machine = self.df_train['cov'].map(lambda lst: [i.split("_")[-1] for i in lst])
-        date = self.df_train['cov'].map(lambda lst: [i.split("_")[-2] for i in lst])
-
-    def show_num_visits(self):
+    def show_num_visits(self, positive_only=False):
         """Show patient counts with n visits."""
-        counts_train = self.df_train.length.value_counts().reset_index()
+        if positive_only:
+            df_train = self.df_train[self.df_train['y'] == 1]
+            df_test = self.df_test[self.df_test['y'] == 1] if self.X_test is not None else None
+        else:
+            df_train = self.df_train
+            df_test = self.df_test
+
+        counts_train = df_train.length.value_counts().reset_index()
         counts_train = counts_train.rename(columns={"index": "Number of Visits", "length": "Count"}).T
 
         counts_test = None
 
         if self.X_test is not None:
-            counts_test = self.df_test.length.value_counts().reset_index()
+            counts_test = df_test.length.value_counts().reset_index()
             counts_test = counts_test.rename(columns={"index": "Number of Visits", "length": "Count"}).T
 
         return counts_train, counts_test
 
 
-def prepare_data_into_sequences(X_train, y_train, cov_train,
-                                X_test, y_test, cov_test,
-                                single_visit, single_target, fix_seq_length):
-    """Prepare data into sequences of (pairs of images)"""
-
-    def sort_data(t_x, t_y, t_cov):
-        cov, X, y = zip(*sorted(zip(t_cov, t_x, t_y), key=lambda x: float(x[0].split("_")[0])))
-        return X, y, cov
-
-    def group(t_x, t_y, t_cov):
-        """Group images according to patient ID"""
-        x, y, cov = defaultdict(list), defaultdict(list), defaultdict(list)
-        for i in range(len(t_cov)):
-            # split data per kidney e.g 5.0Left, 5.0Right, 6.0Left, ...
-            id_ = t_cov[i].split("_")[0] + t_cov[i].split("_")[4]
-            # id = t_cov[i].split("_")[0] # split only on id e.g. 5.0, 6.0, 7.0, ...
-            x[id_].append(t_x[i])
-            y[id_].append(t_y[i])
-            cov[id_].append(t_cov[i])
-        # convert to np array
-        organized_X_train = np.asarray([np.asarray(e) for e in list(x.values())])
-        return organized_X_train, np.asarray(list(y.values())), np.asarray(list(cov.values()))
-
-    def get_only_last_visits(t_x, t_y, t_cov):
-        """Slice data to get only latest n visits."""
-        x, y, cov = [], [], []
-        for i, e in enumerate(t_x):
-            curr_x = e[-1:]
-            curr_x = curr_x.transpose((1, 0, 2, 3))
-            curr_x = curr_x.squeeze()
-            x.append(curr_x)
-            y.append(t_y[i][-1])
-            cov.append(t_cov[i][-1])
-        return np.asarray(x, dtype=np.float64), y, cov
-
-    def standardize_seq_length(X_t, y_t, cov_t):
-        """Zero pad batch of varying sequence length to the max length.
-
-        ==Precondition==:
-            - Input is already grouped by patient ID.
-        """
-        longest_seq = max([len(x) for x in X_t])
-        X_pad = []
-        for x in X_t:
-            x_new = np.zeros((longest_seq, 2, 256, 256))
-            x_new[:x.shape[0], :x.shape[1], :x.shape[2], :x.shape[3]] = x
-            X_pad.append(x_new)
-
-        y_pad = []
-        for y in y_t:
-            if isinstance(y, list) or isinstance(y, tuple):
-                y_new = y.copy()
-                if len(y) != longest_seq:
-                    y_new.extend([""] * abs(len(y) - longest_seq))
-                y_pad.append(y_new)
-            else:  # single target
-                y_pad.append(y)
-
-        cov_pad = []
-        for cov in cov_t:
-            cov_new = cov.copy()
-            if len(cov) != longest_seq:
-                cov_new.extend([""] * abs(len(cov) - longest_seq))
-            cov_pad.append(cov_new)
-
-        # x_t_pad = pad_sequence(x_t, batch_first=True, padding_value=0)
-        # if len(y_t) > 1:
-        #     y_t_pad = pad_sequence([torch.from_numpy(y) for y in y_t], batch_first=True, padding_value=0)
-        # else:
-        #     y_t_pad = y_t
-
-        return X_pad, y_pad, cov_pad
-
-    X_train, y_train, cov_train = sort_data(X_train, y_train, cov_train)
-    X_test, y_test, cov_test = sort_data(X_test, y_test, cov_test)
-
-    if not single_visit:  # group images by patient ID
-        X_train, y_train, cov_train = group(X_train, y_train, cov_train)
-        X_test, y_test, cov_test = group(X_test, y_test, cov_test)
-
-        if single_target:
-            y_train = np.array([seq[-1] for seq in y_train])
-            y_test = np.array([seq[-1] for seq in y_test])
-
-        if fix_seq_length:
-            X_train, y_train, cov_train = standardize_seq_length(X_train, y_train, cov_train)
-            X_test, y_test, cov_test = standardize_seq_length(X_test, y_test, cov_test)
-
-    if single_visit:  # only test on last visit
-        X_test, y_test, cov_test = group(X_test, y_test, cov_test)
-        X_test, y_test, cov_test = get_only_last_visits(X_test, y_test, cov_test)
-
-        # if single_target:   # notice that test already has only 1 y-value
-        #     y_train = np.array([seq[-1] for seq in y_train])
-        print(len(X_train), len(y_train))
-
-    return np.array(X_train), np.array(y_train), np.array(cov_train), np.array(X_test), np.array(y_test), np.array(
-        cov_test)
-
-
-if __name__ == "__main__":
+def load_data():
     git_dir = "C:/Users/Stanley Hua/projects/"
     sys.path.insert(0, git_dir + '/nephronetwork/0.Preprocess/')
     sys.path.insert(0, git_dir + '/nephronetwork/1.Models/siamese_network/')
@@ -209,9 +113,66 @@ if __name__ == "__main__":
         git_dir=git_dir
     )
 
-    X_train_, y_train_, cov_train_, X_test_, y_test_, cov_test_ = prepare_data_into_sequences(X_train_, y_train_, cov_train_,
-                                                                                              X_test_, y_test_, cov_test_,
+    if isinstance(cov_train_, list) and isinstance(cov_test_, list):
+        func_parse_cov = partial(parse_cov, age=True, side=True, sex=False)
+        cov_train_ = list(map(func_parse_cov, cov_train_))
+        cov_test_ = lists(map(func_parse_cov, cov_test_))
+
+    return X_train_, y_train_, cov_train_, X_test_, y_test_, cov_test_
+
+
+if __name__ == "__main__":
+    X_train_, y_train_, cov_train_, X_test_, y_test_, cov_test_ = load_data()
+
+    X_train_, y_train_, cov_train_, X_test_, y_test_, cov_test_ = prepare_data_into_sequences(X_train_, y_train_,
+                                                                                              cov_train_,
+                                                                                              X_test_, y_test_,
+                                                                                              cov_test_,
                                                                                               single_visit=False,
-                                                                                              single_target=True,
-                                                                                              fix_seq_length=False
-                                                                                              )
+                                                                                              single_target=True)
+
+    X = np.concatenate([X_train_, X_test_])
+    y = np.concatenate([y_train_, y_test_])
+    cov = np.concatenate([cov_train_, cov_test_])
+
+    def group_data_by_ID(t_x, t_y, t_cov):
+        """Group by patient IDs."""
+        ids = [cov[0]["ID"] for cov in t_cov]
+        data_by_id = {id_: [] for id_ in ids}
+
+        for i in range(len(t_x)):
+            id_ = t_cov[i][0]["ID"]
+            data_by_id[id_].append((t_x[i], t_y[i], t_cov[i]))
+
+        return list(data_by_id.values())
+
+    data_by_patients = group_data_by_ID(X, y, cov)
+    data_by_patients = shuffle(data_by_patients, random_state=1)
+    train_data_, test_data_ = split(data_by_patients, 0.3)
+
+    train_data = []
+    for d in train_data_:
+        train_data.extend(d)
+    test_data = []
+    for d in test_data_:
+        test_data.extend(d)
+
+    X_train_, y_train_, cov_train_ = zip(*train_data)
+    X_test_, y_test_, cov_test_ = zip(*test_data)
+
+    X_train_, y_train_, cov_train_ = np.array(X_train_, dtype=object), np.array(y_train_, dtype=object), np.array(cov_train_, dtype=object)
+    X_test_, y_test_, cov_test_ = np.array(X_test_, dtype=object), np.array(y_test_, dtype=object), np.array(cov_test_, dtype=object)
+
+    data_viewer = DataViewer(X_train_, y_train_, cov_train_,
+                             X_test_, y_test_, cov_test_)
+    counts_train, counts_test = data_viewer.show_num_visits(positive_only=True)
+
+    print(counts_train)
+    print("Percent Positives: ", np.mean(y_train_ == 1))
+    df = counts_train.T
+    print("# of Positive Patients with 2 or more visits: ", df[df["Number of Visits"] > 1]["Count"].sum(), "/", df["Count"].sum())
+
+    print(counts_test)
+    print("Percent Positives: ", np.mean(y_test_ == 1))
+    df = counts_test.T
+    print("# of Positive Patients with 2 or more visits: ", df[df["Number of Visits"] > 1]["Count"].sum(), "/", df["Count"].sum())

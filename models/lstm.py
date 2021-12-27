@@ -1,6 +1,9 @@
 """Baseline Siamese 2D CNN, followed by an LSTM.
 """
 
+# TODO: Change conv layers to mimick original model
+
+
 import numpy as np
 import torch
 from torch import nn
@@ -57,18 +60,21 @@ class SiameseLSTM(SiamNet):
         @param x_t: tuple containing x_t, and length of each sequence in x_t
         @param x_lens:
         """
-        x_t, x_lengths = data
+        if self.cov_layers:
+            data, in_dict = data
+            x_t, x_lengths = data
+            x_t = x_t, in_dict
+        else:
+            x_t, x_lengths = data
         return self.embed_after_fc7_new(x_t, x_lengths)
 
     def embed_after_fc7_new(self, x_t, x_lengths):
         """Alternative forward pass. LSTM placed after fc7_new layer"""
+        if self.cov_layers:
+            x_t, in_dict = x_t
+
         t_embeddings = []
-
         for x in x_t:
-            if self.cov_layers:
-                in_dict = x
-                x = in_dict['img']
-
             if self.num_inputs == 1:
                 x = x.unsqueeze(1)
 
