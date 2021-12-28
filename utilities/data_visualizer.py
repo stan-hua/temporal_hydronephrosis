@@ -10,7 +10,7 @@ import seaborn as sns
 import numpy as np
 import pandas as pd
 
-from utilities.dataset_prep import prepare_data_into_sequences, parse_cov
+from utilities.dataset_prep import prepare_data_into_sequences, parse_cov, recreate_train_test_split
 
 matplotlib.use("Qt5Agg")
 
@@ -116,7 +116,7 @@ def load_data():
     if isinstance(cov_train_, list) and isinstance(cov_test_, list):
         func_parse_cov = partial(parse_cov, age=True, side=True, sex=False)
         cov_train_ = list(map(func_parse_cov, cov_train_))
-        cov_test_ = lists(map(func_parse_cov, cov_test_))
+        cov_test_ = list(map(func_parse_cov, cov_test_))
 
     return X_train_, y_train_, cov_train_, X_test_, y_test_, cov_test_
 
@@ -124,45 +124,16 @@ def load_data():
 if __name__ == "__main__":
     X_train_, y_train_, cov_train_, X_test_, y_test_, cov_test_ = load_data()
 
+    X_train_, y_train_, cov_train_, X_test_, y_test_, cov_test_ = recreate_train_test_split(X_train_, y_train_,
+                                                                                            cov_train_,
+                                                                                            X_test_, y_test_, cov_test_)
+
     X_train_, y_train_, cov_train_, X_test_, y_test_, cov_test_ = prepare_data_into_sequences(X_train_, y_train_,
                                                                                               cov_train_,
                                                                                               X_test_, y_test_,
                                                                                               cov_test_,
                                                                                               single_visit=False,
                                                                                               single_target=True)
-
-    X = np.concatenate([X_train_, X_test_])
-    y = np.concatenate([y_train_, y_test_])
-    cov = np.concatenate([cov_train_, cov_test_])
-
-    def group_data_by_ID(t_x, t_y, t_cov):
-        """Group by patient IDs."""
-        ids = [cov[0]["ID"] for cov in t_cov]
-        data_by_id = {id_: [] for id_ in ids}
-
-        for i in range(len(t_x)):
-            id_ = t_cov[i][0]["ID"]
-            data_by_id[id_].append((t_x[i], t_y[i], t_cov[i]))
-
-        return list(data_by_id.values())
-
-    data_by_patients = group_data_by_ID(X, y, cov)
-    data_by_patients = shuffle(data_by_patients, random_state=1)
-    train_data_, test_data_ = split(data_by_patients, 0.3)
-
-    train_data = []
-    for d in train_data_:
-        train_data.extend(d)
-    test_data = []
-    for d in test_data_:
-        test_data.extend(d)
-
-    X_train_, y_train_, cov_train_ = zip(*train_data)
-    X_test_, y_test_, cov_test_ = zip(*test_data)
-
-    X_train_, y_train_, cov_train_ = np.array(X_train_, dtype=object), np.array(y_train_, dtype=object), np.array(cov_train_, dtype=object)
-    X_test_, y_test_, cov_test_ = np.array(X_test_, dtype=object), np.array(y_test_, dtype=object), np.array(cov_test_, dtype=object)
-
     data_viewer = DataViewer(X_train_, y_train_, cov_train_,
                              X_test_, y_test_, cov_test_)
     counts_train, counts_test = data_viewer.show_num_visits(positive_only=True)
@@ -170,9 +141,11 @@ if __name__ == "__main__":
     print(counts_train)
     print("Percent Positives: ", np.mean(y_train_ == 1))
     df = counts_train.T
-    print("# of Positive Patients with 2 or more visits: ", df[df["Number of Visits"] > 1]["Count"].sum(), "/", df["Count"].sum())
+    print("# of Positive Examples with 2 or more visits: ", df[df["Number of Visits"] > 1]["Count"].sum(), "/",
+          df["Count"].sum())
 
     print(counts_test)
     print("Percent Positives: ", np.mean(y_test_ == 1))
     df = counts_test.T
-    print("# of Positive Patients with 2 or more visits: ", df[df["Number of Visits"] > 1]["Count"].sum(), "/", df["Count"].sum())
+    print("# of Positive Examples with 2 or more visits: ", df[df["Number of Visits"] > 1]["Count"].sum(), "/",
+          df["Count"].sum())

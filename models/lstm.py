@@ -1,9 +1,6 @@
 """Baseline Siamese 2D CNN, followed by an LSTM.
 """
 
-# TODO: Change conv layers to mimick original model
-
-
 import numpy as np
 import torch
 from torch import nn
@@ -15,9 +12,7 @@ from models.baselineSiamese import SiamNet
 # noinspection PyTypeChecker,PyUnboundLocalVariable
 class SiameseLSTM(SiamNet):
     def __init__(self, classes=2, num_inputs=2, output_dim=128, cov_layers=False, device=None, dropout_rate=0.5,
-                 batch_size=1,
-                 n_lstm_layers=1, hidden_dim=256,
-                 bidirectional=False, insert_where=2):
+                 batch_size=1, n_lstm_layers=1, hidden_dim=256, bidirectional=False, insert_where=2):
         super().__init__(classes=classes, num_inputs=num_inputs, output_dim=output_dim, cov_layers=cov_layers,
                          device=device, dropout_rate=dropout_rate)
 
@@ -29,12 +24,11 @@ class SiameseLSTM(SiamNet):
         self.hidden_dim = hidden_dim
 
         # Change FC layers
-        if self.insert_where == 0:       # immediately after U-Net
-            input_size = 256 * 7 * 7 * 2
-            self.fc6c.fc7 = nn.Linear(self.hidden_dim, 512)
-        elif self.insert_where == 1:      # after first FC layer
+        if self.insert_where == 0:              # immediately after convolutional layer
+            input_size = 256 * 3 * 3 * 2
+        elif self.insert_where == 1:            # after first FC layer
             input_size = 1024
-            self.fc7_new.fc7 = nn.Linear(self.hidden_dim, self.output_dim)
+            self.fc7_new.fc7 = nn.Linear(256 * 3 * 3 * 2, self.output_dim)
         else:                                   # right before prediction layer
             input_size = self.output_dim
             self.classifier_new.fc8 = nn.Linear(self.hidden_dim, classes)
@@ -57,8 +51,7 @@ class SiameseLSTM(SiamNet):
         """Accepts sequence of dual view images. Extracts penultimate layer embeddings for each dual view, then
         uses an LSTM to aggregate spatial features over time.
 
-        @param x_t: tuple containing x_t, and length of each sequence in x_t
-        @param x_lens:
+        @param data: tuple containing sequence of images X, their lengths, and optionally covariates.
         """
         if self.cov_layers:
             data, in_dict = data
@@ -66,10 +59,16 @@ class SiameseLSTM(SiamNet):
             x_t = x_t, in_dict
         else:
             x_t, x_lengths = data
-        return self.embed_after_fc7_new(x_t, x_lengths)
 
-    def embed_after_fc7_new(self, x_t, x_lengths):
-        """Alternative forward pass. LSTM placed after fc7_new layer"""
+        if self.insert_where == 0:
+            out = self._embed_after_conv(x_t, x_lengths)
+        else:
+            out = self._embed_before_prediction(x_t, x_lengths)
+
+        return out
+
+    def _embed_before_prediction(self, x_t, x_lengths):
+        """Alternative forward pass. LSTM placed after fc7_new layer."""
         if self.cov_layers:
             x_t, in_dict = x_t
 
@@ -85,24 +84,20 @@ class SiameseLSTM(SiamNet):
                 curr_x = torch.unsqueeze(x[i], 1)
 
                 # Grayscale to RGB
-                curr_x = curr_x.expand(-1, 1, -1, -1)
+                curr_x = curr_x.expand(-1, 3, -1, -1)
                 if torch.cuda.is_available():
                     input_ = torch.cuda.FloatTensor(curr_x.to(self.device))
                 else:
                     input_ = torch.FloatTensor(curr_x.to(self.device))
-                out1 = self.conv1(input_)
-                out2 = self.conv2(out1)
-                out3 = self.conv3(out2)
-                out4 = self.conv4(out3)
-                out5 = self.conv5(out4)
-                out6 = self.fc6(out5)
-                unet1 = self.uconnect1(out6)
-
-                curr_x = self.fc6c(unet1.view([B, 1, -1]))
-                x_list.append(curr_x.view([B, 1, -1]))
+                z = self.conv(input_)
+                z = self.fc6(z)
+                z = self.fc6b(z)
+                z = z.view([B, 1, -1])
+                z = self.fc6c(z)
+                z = z.view([B, 1, -1])
+                x_list.append(z)
 
             x = torch.cat(x_list, 1)
-            # x = torch.sum(x, 1)
             x = self.fc7_new(x.view(B, -1))
             t_embeddings.append(x)
 
@@ -119,18 +114,27 @@ class SiameseLSTM(SiamNet):
 
         # Use last hidden state
         pred = self.classifier_new(h_f[-1])
+
+        if self.cov_layers:
+            self.classifier_new.add_module('relu8', nn.ReLU(inplace=True))
+
+            self.add_covs1 = nn.Sequential()
+            self.add_covs1.add_module('fc9', nn.Linear(classes + 2, classes + 126))
+            self.add_covs1.add_module('relu9', nn.ReLU(inplace=True))
+
+            self.add_covs2 = nn.Sequential()
+            self.add_covs2.add_module('fc10', nn.Linear(classes + 126, classes))
+
         return pred
 
     # TODO: Do this
-    def embed_before_fc6(self, x_t):
-        """Alternative forward pass. LSTM placed before fc6 layer"""
+    def _embed_after_first_fc(self, x_t):
+        """Alternative forward pass. LSTM placed after the first fully connected layer"""
+        if self.cov_layers:
+            x_t, in_dict = x_t
+
         t_embeddings = []
-
         for x in x_t:
-            if self.cov_layers:
-                in_dict = x
-                x = in_dict['img']
-
             if self.num_inputs == 1:
                 x = x.unsqueeze(1)
 
@@ -139,41 +143,87 @@ class SiameseLSTM(SiamNet):
             x_list = []
             for i in range(self.num_inputs):
                 curr_x = torch.unsqueeze(x[i], 1)
-
-                # Grayscale to RGB
-                curr_x = curr_x.expand(-1, 1, -1, -1)
+                curr_x = curr_x.expand(-1, 3, -1, -1)
                 if torch.cuda.is_available():
                     input_ = torch.cuda.FloatTensor(curr_x.to(self.device))
                 else:
                     input_ = torch.FloatTensor(curr_x.to(self.device))
-                out1 = self.conv1(input_)
-                out2 = self.conv2(out1)
-                out3 = self.conv3(out2)
-                out4 = self.conv4(out3)
-                out5 = self.conv5(out4)
-                out6 = self.fc6(out5)
-                unet1 = self.uconnect1(out6)
-
-                x_list.append(unet1.view([B, 1, -1]))
+                z = self.conv(input_)
+                z = self.fc6(z)
+                z = self.fc6b(z)
+                z = z.view([B, 1, -1])
+                # z = self.fc6c(z)
+                # z = z.view([B, 1, -1])
+                x_list.append(z)
 
             x = torch.cat(x_list, 1)
+            x = self.fc7_new(x.view(B, -1))
             t_embeddings.append(x)
 
-        x = torch.stack(t_embeddings).unsqueeze(0)
+        x = torch.stack(t_embeddings)
+        x = pack_padded_sequence(x, x_lengths, batch_first=True, enforce_sorted=False)
+        lstm_out, (h_f, _) = self.lstm(x)
+        pred = self.classifier_new(h_f[-1])
 
-        # initiate batch hidden and cell states
-        hidden_0 = torch.zeros(self.n_lstm_layers, self.batch_size, self.hidden_dim).requires_grad_().to(device)
-        cellState_0 = torch.zeros(self.n_lstm_layers, self.batch_size, self.hidden_dim).requires_grad_().to(device)
+        if self.cov_layers:
+            self.classifier_new.add_module('relu8', nn.ReLU(inplace=True))
 
-        lstm_out, _ = self.lstm(x, (hidden_0.detach(), cellState_0.detach()))
-        lstm_out = torch.squeeze(lstm_out, 0)
+            self.add_covs1 = nn.Sequential()
+            self.add_covs1.add_module('fc9', nn.Linear(classes + 2, classes + 126))
+            self.add_covs1.add_module('relu9', nn.ReLU(inplace=True))
 
-        x = self.fc6c(lstm_out.view([B, 1, -1]))
-        x = self.fc7_new(x)
+            self.add_covs2 = nn.Sequential()
+            self.add_covs2.add_module('fc10', nn.Linear(classes + 126, classes))
 
-        pred = self.classifier_new(x)
         return pred
 
     # TODO: Do this
-    def embed_after_fc6(self, x_t):
-        raise NotImplementedError
+    def _embed_after_conv(self, x_t, x_lengths):
+        """Alternative forward pass. LSTM placed after last convolutional layer (fc6b)."""
+        if self.cov_layers:
+            x_t, in_dict = x_t
+
+        t_embeddings = []
+        for x in x_t:
+            if self.num_inputs == 1:
+                x = x.unsqueeze(1)
+
+            B, T, C, H = x.size()
+            x = x.transpose(0, 1)
+            x_list = []
+            for i in range(self.num_inputs):
+                curr_x = torch.unsqueeze(x[i], 1)
+                curr_x = curr_x.expand(-1, 3, -1, -1)
+                if torch.cuda.is_available():
+                    input_ = torch.cuda.FloatTensor(curr_x.to(self.device))
+                else:
+                    input_ = torch.FloatTensor(curr_x.to(self.device))
+                z = self.conv(input_)
+                z = self.fc6(z)
+                z = self.fc6b(z)
+                z = z.view([B, 1, -1])
+                # z = self.fc6c(z)
+                # z = z.view([B, 1, -1])
+                x_list.append(z)
+
+            x = torch.cat(x_list, 1)
+            x = x.view(B, -1)
+            # x = self.fc7_new(x)
+            t_embeddings.append(x)
+
+        x = torch.stack(t_embeddings)
+        x = pack_padded_sequence(x, x_lengths, batch_first=True, enforce_sorted=False)
+        lstm_out, (h_f, _) = self.lstm(x)
+        pred = self.classifier_new(h_f[-1])
+
+        if self.cov_layers:
+            self.classifier_new.add_module('relu8', nn.ReLU(inplace=True))
+
+            self.add_covs1 = nn.Sequential()
+            self.add_covs1.add_module('fc9', nn.Linear(classes + 2, classes + 126))
+            self.add_covs1.add_module('relu9', nn.ReLU(inplace=True))
+
+            self.add_covs2 = nn.Sequential()
+            self.add_covs2.add_module('fc10', nn.Linear(classes + 126, classes))
+
+        return pred

@@ -6,14 +6,11 @@
   <component name="ChangeListManager">
     <list default="true" id="2e439ead-1cec-4da4-9021-fd0df7818330" name="Changes" comment="Fixed code issues in Kaiming initialization and logical issues in hyperparameter search.">
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/grid_search.py" beforeDir="false" afterPath="$PROJECT_DIR$/grid_search.py" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/model_training.py" beforeDir="false" afterPath="$PROJECT_DIR$/model_training.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/models/baselineSiamese.py" beforeDir="false" afterPath="$PROJECT_DIR$/models/baselineSiamese.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/models/convPooling.py" beforeDir="false" afterPath="$PROJECT_DIR$/models/convPooling.py" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/models/lstm.py" beforeDir="false" afterPath="$PROJECT_DIR$/models/lstm.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/models/tsm.py" beforeDir="false" afterPath="$PROJECT_DIR$/models/tsm.py" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/utilities/data_visualizer.py" beforeDir="false" afterPath="$PROJECT_DIR$/utilities/data_visualizer.py" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/utilities/dataset_prep.py" beforeDir="false" afterPath="$PROJECT_DIR$/utilities/dataset_prep.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/utilities/results.py" beforeDir="false" afterPath="$PROJECT_DIR$/utilities/results.py" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -26,6 +23,9 @@
         <option value="Python Script" />
       </list>
     </option>
+  </component>
+  <component name="Git.Merge.Settings">
+    <option name="BRANCH" value="add_cov" />
   </component>
   <component name="Git.Settings">
     <option name="RECENT_BRANCH_BY_REPOSITORY">
@@ -76,7 +76,7 @@
       <recent name="C:\Users\Stanley Hua\projects\temporal_hydronephrosis" />
     </key>
   </component>
-  <component name="RunManager" selected="Python.model_training">
+  <component name="RunManager" selected="Python.tsm">
     <configuration default="true" type="PythonConfigurationType" factoryName="Python">
       <module name="temporal_hydronephrosis" />
       <option name="INTERPRETER_OPTIONS" value="" />
@@ -98,31 +98,13 @@
       <option name="INPUT_FILE" value="" />
       <method v="2" />
     </configuration>
-    <configuration name="baselineSiamese" type="PythonConfigurationType" factoryName="Python" temporary="true" nameIsGenerated="true">
+    <configuration name="data_visualizer" type="PythonConfigurationType" factoryName="Python" temporary="true" nameIsGenerated="true">
       <module name="temporal_hydronephrosis" />
       <option name="INTERPRETER_OPTIONS" value="" />
       <option name="PARENT_ENVS" value="true" />
       <envs>
         <env name="PYTHONUNBUFFERED" value="1" />
       </envs>
-      <option name="SDK_HOME" value="C:\Users\Stanley Hua\Anaconda3\envs\DL\python.exe" />
-      <option name="WORKING_DIRECTORY" value="$PROJECT_DIR$/.." />
-      <option name="IS_MODULE_SDK" value="true" />
-      <option name="ADD_CONTENT_ROOTS" value="true" />
-      <option name="ADD_SOURCE_ROOTS" value="true" />
-      <option name="SCRIPT_NAME" value="$PROJECT_DIR$/models/baselineSiamese.py" />
-      <option name="PARAMETERS" value="" />
-      <option name="SHOW_COMMAND_LINE" value="true" />
-      <option name="EMULATE_TERMINAL" value="false" />
-      <option name="MODULE_MODE" value="false" />
-      <option name="REDIRECT_INPUT" value="false" />
-      <option name="INPUT_FILE" value="" />
-      <method v="2" />
-    </configuration>
-    <configuration name="data_visualizer" type="PythonConfigurationType" factoryName="Python" temporary="true" nameIsGenerated="true">
-      <module name="temporal_hydronephrosis" />
-      <option name="INTERPRETER_OPTIONS" value="" />
-      <option name="PARENT_ENVS" value="true" />
       <option name="SDK_HOME" value="" />
       <option name="WORKING_DIRECTORY" value="$PROJECT_DIR$/.." />
       <option name="IS_MODULE_SDK" value="true" />
@@ -263,22 +245,40 @@
       <option name="INPUT_FILE" value="" />
       <method v="2" />
     </configuration>
+    <configuration name="tsm" type="PythonConfigurationType" factoryName="Python" temporary="true" nameIsGenerated="true">
+      <module name="temporal_hydronephrosis" />
+      <option name="INTERPRETER_OPTIONS" value="" />
+      <option name="PARENT_ENVS" value="true" />
+      <option name="SDK_HOME" value="C:\Users\Stanley Hua\Anaconda3\envs\DL\python.exe" />
+      <option name="WORKING_DIRECTORY" value="$PROJECT_DIR$/.." />
+      <option name="IS_MODULE_SDK" value="true" />
+      <option name="ADD_CONTENT_ROOTS" value="true" />
+      <option name="ADD_SOURCE_ROOTS" value="true" />
+      <option name="SCRIPT_NAME" value="$PROJECT_DIR$/models/tsm.py" />
+      <option name="PARAMETERS" value="" />
+      <option name="SHOW_COMMAND_LINE" value="true" />
+      <option name="EMULATE_TERMINAL" value="false" />
+      <option name="MODULE_MODE" value="false" />
+      <option name="REDIRECT_INPUT" value="false" />
+      <option name="INPUT_FILE" value="" />
+      <method v="2" />
+    </configuration>
     <list>
       <item itemvalue="Python.temporal_hydronephrosis" />
       <item itemvalue="Python.model_training" />
-      <item itemvalue="Python.baselineSiamese" />
       <item itemvalue="Python.data_visualizer" />
       <item itemvalue="Python.grid_search" />
       <item itemvalue="Python.train_siamese_network_CV_v3_STStanTest" />
       <item itemvalue="Python.dataset_prep" />
+      <item itemvalue="Python.tsm" />
     </list>
     <recent_temporary>
       <list>
-        <item itemvalue="Python.data_visualizer" />
+        <item itemvalue="Python.tsm" />
         <item itemvalue="Python.grid_search" />
+        <item itemvalue="Python.data_visualizer" />
         <item itemvalue="Python.dataset_prep" />
         <item itemvalue="Python.train_siamese_network_CV_v3_STStanTest" />
-        <item itemvalue="Python.data_visualizer" />
       </list>
     </recent_temporary>
   </component>

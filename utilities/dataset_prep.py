@@ -2,12 +2,12 @@
 Use this module to prepare data for model training. Can be used to prepare sequence of images.
 """
 from collections import defaultdict
-from functools import partial
 from datetime import datetime
 
 import numpy as np
 import torch
 from sklearn.model_selection import StratifiedKFold
+from sklearn.utils import shuffle
 from torch.nn.utils.rnn import pad_sequence
 from torch.utils.data import DataLoader, WeightedRandomSampler
 
@@ -41,13 +41,30 @@ class KidneyDataset(torch.utils.data.Dataset):
 
 def recreate_train_test_split(X_train, y_train, cov_train,
                               X_test, y_test, cov_test):
+    """Recombine split data. Shuffle then split 70-30 by patients.
+
+    ==Precondition==:
+        - <cov_train> and <cov_test> have been parsed into dictionaries.
+    """
     X = np.concatenate([X_train, X_test])
     y = np.concatenate([y_train, y_test])
     cov = np.concatenate([cov_train, cov_test])
 
     data_by_patients = group_data_by_ID(X, y, cov)
     data_by_patients = shuffle(data_by_patients, random_state=1)
-    train_data_, test_data_ = split(data_by_patients, 0.3)
+    train_data_, test_data_ = split_data(data_by_patients, 0.3)
+
+    train_data = []
+    for d in train_data_:
+        train_data.extend(d)
+    test_data = []
+    for d in test_data_:
+        test_data.extend(d)
+
+    X_train_, y_train_, cov_train_ = zip(*train_data)
+    X_test_, y_test_, cov_test_ = zip(*test_data)
+
+    return X_train_, y_train_, cov_train_, X_test_, y_test_, cov_test_
 
 
 def make_validation_set(X_train, y_train, cov_train,
@@ -58,14 +75,10 @@ def make_validation_set(X_train, y_train, cov_train,
 
     If include_validation is false, then return the same input.
     """
-
-    def split(data, split):
-        return data[:-int(len(data) * split)], data[-int(len(data) * split):]
-
     if not cv:
-        X_train, X_val = split(X_train, train_val_split)
-        y_train, y_val = split(y_train, train_val_split)
-        cov_train, cov_val = split(cov_train, train_val_split)
+        X_train, X_val = split_data(X_train, train_val_split)
+        y_train, y_val = split_data(y_train, train_val_split)
+        cov_train, cov_val = split_data(cov_train, train_val_split)
         return [(X_train, y_train, cov_train, X_val, y_val, cov_val)]
     else:
         skf = StratifiedKFold(n_splits=num_folds, shuffle=True, random_state=42)
@@ -128,6 +141,22 @@ def pad_collate(batch):
             assert len(cov) == max(x_lens)
 
     return (x_pad, np.array(x_lens)), y_t, cov_t
+
+
+def split_data(data, split: int):
+    return data[:-int(len(data) * split)], data[-int(len(data) * split):]
+
+
+def group_data_by_ID(X_, y_, cov_):
+    """Group by patient IDs."""
+    ids = [c["ID"] for c in cov_]
+    data_by_id = {id_: [] for id_ in ids}
+
+    for i in range(len(X_)):
+        id_ = cov_[i]["ID"]
+        data_by_id[id_].append((X_[i], y_[i], cov_[i]))
+
+    return list(data_by_id.values())
 
 
 def prepare_data_into_sequences(X_train, y_train, cov_train,

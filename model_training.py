@@ -18,7 +18,8 @@ from models.baselineSiamese import SiamNet
 from models.convPooling import SiamNetConvPooling
 from models.lstm import SiameseLSTM
 from utilities.data_visualizer import plot_loss
-from utilities.dataset_prep import prepare_data_into_sequences, make_validation_set, create_data_loaders, parse_cov, remove_unnecessary_cov
+from utilities.dataset_prep import prepare_data_into_sequences, make_validation_set, create_data_loaders, parse_cov, \
+    remove_unnecessary_cov, recreate_train_test_split
 from utilities.results import Results
 
 warnings.filterwarnings('ignore')
@@ -41,7 +42,6 @@ curr_results_dir = f"{results_dir}{model_name}_{timestamp}/"
 training_info_path = f"{curr_results_dir}info.csv"
 auc_path = f"{curr_results_dir}auc.json"
 results_summary_path = f"{curr_results_dir}history.csv"
-
 
 # Set the random seed manually for reproducibility. Set other torch-related variables.
 np.random.seed(SEED)
@@ -115,7 +115,7 @@ def modifyArgs(args):
     # args.lr = 0.00001
     # args.batch_size = 1
     args.early_stopping_patience = 100
-    args.save_frequency = 100           # Save weights every x epochs
+    args.save_frequency = 100  # Save weights every x epochs
     args.include_cov = True
     args.load_hyperparameters = False
     args.pretrained = False
@@ -479,6 +479,10 @@ def main():
         func_parse_cov = partial(parse_cov, age=True, side=True, sex=False)
         cov_train = list(map(func_parse_cov, cov_train))
         cov_test = list(map(func_parse_cov, cov_test))
+
+    # Recreate data split
+    X_train, y_train, cov_train, X_test, y_test, cov_test = recreate_train_test_split(X_train, y_train, cov_train,
+                                                                                      X_test, y_test, cov_test)
 
     # Prepare data into sequences
     X_train, y_train, cov_train, X_test, y_test, cov_test = prepare_data_into_sequences(X_train, y_train, cov_train,
