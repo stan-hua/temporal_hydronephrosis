@@ -19,7 +19,7 @@ from models.convPooling import SiamNetConvPooling
 from models.lstm import SiameseLSTM
 from utilities.data_visualizer import plot_loss
 from utilities.dataset_prep import prepare_data_into_sequences, make_validation_set, create_data_loaders, parse_cov, \
-    remove_unnecessary_cov, recreate_train_test_split
+    remove_unnecessary_cov, recreate_train_test_split, remove_invalid_samples
 from utilities.results import Results
 
 warnings.filterwarnings('ignore')
@@ -112,8 +112,8 @@ def modifyArgs(args):
     global model_name
 
     # Model hyperparameters
-    # args.lr = 0.00001
-    # args.batch_size = 1
+    args.lr = 0.0001
+    args.batch_size = 1
     args.early_stopping_patience = 100
     args.save_frequency = 100  # Save weights every x epochs
     args.include_cov = True
@@ -242,7 +242,8 @@ def train(args, X_train, y_train, cov_train, X_test, y_test, cov_test, X_val=Non
                    'weight_decay': args.weight_decay, 'train/test_split': args.split,
                    'patience': args.early_stopping_patience,
                    'num_epochs': args.epochs, 'stop_epoch': args.stop_epoch,
-                   'balance_classes': args.balance_classes
+                   'balance_classes': args.balance_classes,
+                   'include_cov': args.include_cov
                    }
     if args.load_hyperparameters:
         load_hyperparameters(hyperparams, best_hyperparameters_folder)
@@ -317,7 +318,6 @@ def train(args, X_train, y_train, cov_train, X_test, y_test, cov_test, X_val=Non
 
                 res.accurate_pred_train += torch.sum(torch.argmax(output, dim=1) == target).cpu()
                 res.counter_train += len(target)
-
                 assert len(pred_prob) == len(target)
                 assert len(pred_label) == len(target)
                 res.all_pred_prob_train.append(pred_prob)
@@ -479,6 +479,10 @@ def main():
         func_parse_cov = partial(parse_cov, age=True, side=True, sex=False)
         cov_train = list(map(func_parse_cov, cov_train))
         cov_test = list(map(func_parse_cov, cov_test))
+
+    # Remove samples without proper covariates
+    X_train, y_train, cov_train = remove_invalid_samples(X_train, y_train, cov_train)
+    X_test, y_test, cov_test = remove_invalid_samples(X_test, y_test, cov_test)
 
     # Recreate data split
     X_train, y_train, cov_train, X_test, y_test, cov_test = recreate_train_test_split(X_train, y_train, cov_train,

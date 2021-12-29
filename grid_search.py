@@ -5,6 +5,8 @@ import subprocess
 import shutil
 from datetime import datetime
 from glob import glob
+from itertools import product
+from sklearn.utils import shuffle
 
 import pandas as pd
 
@@ -13,6 +15,7 @@ class GridSearch:
     timestamp_: str
     grid_search_dir_: str
     model_type_: str
+    randomized: bool
 
     def __init__(self, model_type_, timestamp_, grid_search_dir_):
         self.model_type = model_type_
@@ -62,7 +65,7 @@ class GridSearch:
             # Get epoch for best results and model parameters
             df_results = pd.read_csv(f"{dir_}/history.csv")
             df_best_epoch = self.findBestEpoch(df_results, "loss")
-            self.removeUnnecessaryWeights(dir_, df_best_epoch.epoch.iloc[0] if keep_best_weights else -10)
+            self.removeUnnecessaryWeights(dir_, df_best_epoch.epoch.iloc[0] if keep_best_weights else -1000)
 
             # Add in parameters
             params = pd.read_csv(f"{dir_}/info.csv").iloc[0].to_dict()
@@ -78,17 +81,17 @@ class GridSearch:
     def saveBestParameters(self, df):
         """Given dataframe where each row is a model run, extract the best performing model based on the validation set
         and save hyperparameters."""
-        df[df.sum_auc == df.sum_auc.max()].iloc[0].to_json(f"{self.grid_search_dir}/best_parameters.json")
+        df[df.loss == df.loss.min()].iloc[0].to_json(f"{self.grid_search_dir}/best_parameters.json")
 
     @staticmethod
-    def removeUnnecessaryWeights(directory, best_epoch=-10):
+    def removeUnnecessaryWeights(directory, best_epoch=-1000):
         """Remove all weights in directory for model epochs 2 above and/or below best."""
         if not os.path.exists(directory):
             return
 
         all_weights_paths = glob(f"{directory}/model-epoch_*.pth")
         if len(all_weights_paths) > 0:
-            epoch_numbers = [int(path.split("_")[-1].split(".")[0][0]) for path in all_weights_paths]
+            epoch_numbers = [int(path.split("_")[-1].split(".")[0].split("-")[0]) for path in all_weights_paths]
             distance = [abs(epoch - best_epoch) for epoch in epoch_numbers]
             closest_epoch_index = [i for i in range(len(distance)) if distance[i] == min(distance)][0]
 
@@ -101,26 +104,63 @@ class GridSearch:
                             batch_sizes_: list,
                             momentums_: list,
                             adams_: list,
-                            num_epochs_: int):
+                            num_epochs_: int, n=None):
         """
-        Performs grid search on given specified parameter lists.
+        Performs randomized grid search on given specified parameter lists. Tested parameter combinations are saved.
         @param lrs_: learning rates to test
         @param batch_sizes_: batch sizes to test
         @param momentums_: SGD momentums to test (if adam is True)
         @param adams_: If contains True, will run adam. If contains False, will run SGD.
         @param num_epochs_: number of epochs
+        @param n: maximume number of parameter combinations to test
         """
-        for batch_size in batch_sizes_:
-            for lr in lrs_:
-                for adam in adams_:
-                    for momentum in momentums_:
-                        subprocess.run(f'python "{project_dir}/model_training.py" '
-                                       f"--batch_size {batch_size} "
-                                       f"--lr {lr} "
-                                       f"--stop_epoch {num_epochs_} "
-                                       f"--momentum {momentum} "
-                                       + (f"--adam" if adam else ""),
-                                       shell=True)
+        hyperparam_comb = list(product(batch_sizes_, lrs_, adams_, momentums_))
+        hyperparam_comb = shuffle(hyperparam_comb)
+
+        # Remove tested combinations
+        df = None
+        if os.path.isfile(f"{grid_search_dir}/tested_combinations.csv"):
+            df = pd.read_csv(f"{grid_search_dir}/tested_combinations.csv")
+            tested_values = df[["batch_size", "lr", "adam", "momentum"]].to_records(index=False).tolist()
+            hyperparam_comb = [i for i in hyperparam_comb if i not in tested_values]
+        final_hyperparam_comb = []
+        for batch_size, lr, adam, momentum in hyperparam_comb:
+            if adam and momentum != momentums_[0]:
+                pass
+            else:
+                final_hyperparam_comb.append((batch_size, lr, adam, momentum))
+
+        # Limit number of combinations to test
+        if n is not None and abs(n) <= len(hyperparam_comb):
+            hyperparam_comb = hyperparam_comb[:abs(n)]
+
+        for batch_size, lr, adam, momentum in hyperparam_comb:
+            subprocess.run(f'python "{project_dir}/model_training.py" '
+                           f"--batch_size {batch_size} "
+                           f"--lr {lr} "
+                           f"--stop_epoch {num_epochs_} "
+                           f"--momentum {momentum} "
+                           + (f"--adam" if adam else ""),
+                           shell=True)
+            df = GridSearch.save_combinations((batch_size, lr, num_epochs_, adam, momentum), df)
+
+    @staticmethod
+    def save_combinations(hyperparams, df=None):
+        cols = ["batch_size", "lr", "stop_epoch", "adam", "momentum"]
+        df_new = pd.DataFrame(dict(zip(cols, hyperparams)), index=[0])
+        if df is None:
+            df = df_new
+        else:
+            df = pd.concat([df, df_new], ignore_index=True)
+        df.to_csv(f"{grid_search_dir}/tested_combinations.csv", index=False)
+        return df
+
+    def find_combinations(self):
+        cols = ["batch_size", "lr", "stop_epoch", "adam", "momentum"]
+        file = f"{self.grid_search_dir}/grid_search({self.timestamp}).csv"
+        if os.path.isfile(file):
+            df = pd.read_csv(file)
+            df[cols].to_csv(f"{grid_search_dir}/tested_combinations.csv", index=False)
 
     def save_grid_search_results(self):
         df = self.findBestPerformingModels()
@@ -142,6 +182,7 @@ if __name__ == "__main__":
     keep_best_weights = False
 
     timestamp = datetime.now().strftime("%Y-%m-%d")
+    timestamp = "2021-12-28"
     grid_search_dir = f"{project_dir}/results/{model_type}{'_' if (len(model_type) > 0) else ''}grid_search({timestamp})/"
 
     if not os.path.exists(grid_search_dir):
@@ -154,5 +195,7 @@ if __name__ == "__main__":
     num_epochs = 100
 
     gridSearch = GridSearch(model_type, timestamp, grid_search_dir)
+    gridSearch.save_grid_search_results()
+    gridSearch.find_combinations()
     gridSearch.perform_grid_search(lrs, batch_sizes, momentums, adams, num_epochs)
     gridSearch.save_grid_search_results()

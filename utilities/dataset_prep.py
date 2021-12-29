@@ -39,55 +39,6 @@ class KidneyDataset(torch.utils.data.Dataset):
         return weights
 
 
-def recreate_train_test_split(X_train, y_train, cov_train,
-                              X_test, y_test, cov_test):
-    """Recombine split data. Shuffle then split 70-30 by patients.
-
-    ==Precondition==:
-        - <cov_train> and <cov_test> have been parsed into dictionaries.
-    """
-    X = np.concatenate([X_train, X_test])
-    y = np.concatenate([y_train, y_test])
-    cov = np.concatenate([cov_train, cov_test])
-
-    data_by_patients = group_data_by_ID(X, y, cov)
-    data_by_patients = shuffle(data_by_patients, random_state=1)
-    train_data_, test_data_ = split_data(data_by_patients, 0.3)
-
-    train_data = []
-    for d in train_data_:
-        train_data.extend(d)
-    test_data = []
-    for d in test_data_:
-        test_data.extend(d)
-
-    X_train_, y_train_, cov_train_ = zip(*train_data)
-    X_test_, y_test_, cov_test_ = zip(*test_data)
-
-    return X_train_, y_train_, cov_train_, X_test_, y_test_, cov_test_
-
-
-def make_validation_set(X_train, y_train, cov_train,
-                        cv=False, num_folds=5,
-                        train_val_split=0.2):
-    """HELPER FUNCTION. Split training data into training and validation splits. If cross-fold validation specified,
-    return generator of <num_folds> train-val splits.
-
-    If include_validation is false, then return the same input.
-    """
-    if not cv:
-        X_train, X_val = split_data(X_train, train_val_split)
-        y_train, y_val = split_data(y_train, train_val_split)
-        cov_train, cov_val = split_data(cov_train, train_val_split)
-        return [(X_train, y_train, cov_train, X_val, y_val, cov_val)]
-    else:
-        skf = StratifiedKFold(n_splits=num_folds, shuffle=True, random_state=42)
-
-        return ((X_train[train_index], y_train[train_index], cov_train[train_index],
-                 X_train[test_index], y_train[test_index], cov_train[test_index]) for train_index, test_index in
-                skf.split(X_train, y_train))
-
-
 def create_data_loaders(X_train, y_train, cov_train, X_val, y_val, cov_val, X_test, y_test, cov_test,
                         args, params, val_test_params):
     # Datasets
@@ -118,6 +69,53 @@ def create_data_loaders(X_train, y_train, cov_train, X_val, y_val, cov_val, X_te
     return training_generator, val_generator, test_generator
 
 
+def recreate_train_test_split(X_train, y_train, cov_train,
+                              X_test, y_test, cov_test):
+    """Recombine split data. Shuffle then split 70-30 by patients.
+
+    ==Precondition==:
+        - <cov_train> and <cov_test> have been parsed into dictionaries.
+    """
+    X = np.concatenate([X_train, X_test])
+    y = np.concatenate([y_train, y_test])
+    cov = np.concatenate([cov_train, cov_test])
+
+    data_by_patients = group_data_by_ID(X, y, cov)
+    data_by_patients = shuffle(data_by_patients, random_state=1)
+    train_data_, test_data_ = split_data(data_by_patients, 0.3)
+
+    train_data = []
+    for d in train_data_:
+        train_data.extend(d)
+    test_data = []
+    for d in test_data_:
+        test_data.extend(d)
+
+    X_train_, y_train_, cov_train_ = zip(*train_data)
+    X_test_, y_test_, cov_test_ = zip(*test_data)
+
+    return X_train_, y_train_, cov_train_, X_test_, y_test_, cov_test_
+
+
+def make_validation_set(X_train, y_train, cov_train, cv=False, num_folds=5, train_val_split=0.2):
+    """HELPER FUNCTION. Split training data into training and validation splits. If cross-fold validation specified,
+    return generator of <num_folds> train-val splits.
+
+    If include_validation is false, then return the same input.
+    """
+    if not cv:
+        X_train, X_val = split_data(X_train, train_val_split)
+        y_train, y_val = split_data(y_train, train_val_split)
+        cov_train, cov_val = split_data(cov_train, train_val_split)
+        return [(X_train, y_train, cov_train, X_val, y_val, cov_val)]
+    else:
+        skf = StratifiedKFold(n_splits=num_folds, shuffle=True, random_state=42)
+
+        return ((X_train[train_index], y_train[train_index], cov_train[train_index],
+                 X_train[val_index], y_train[val_index], cov_train[val_index]) for train_index, val_index in
+                skf.split(X_train, y_train))
+
+
 # ==HELPER FUNCTIONS==:
 def pad_collate(batch):
     """Pad batch to be of the longest sequence length.
@@ -131,12 +129,12 @@ def pad_collate(batch):
 
     # Perform padding in-place (for target and covariates)
     for y in y_t:
-        if isinstance(y, list) and (len(y) != max(x_lens)):     # zero-padding
+        if isinstance(y, list) and (len(y) != max(x_lens)):  # zero-padding
             y.extend([0] * abs(len(y) - max(x_lens)))
             assert len(y) == max(x_lens)
 
     for cov in cov_t:
-        if len(cov) != max(x_lens):     # pad with empty dictionary
+        if len(cov) != max(x_lens):  # pad with empty dictionary
             cov.extend([{}] * abs(len(cov) - max(x_lens)))
             assert len(cov) == max(x_lens)
 
@@ -148,7 +146,7 @@ def split_data(data, split: int):
 
 
 def group_data_by_ID(X_, y_, cov_):
-    """Group by patient IDs."""
+    """Group by patient IDs. Return a list where each item in the list corresponds to a unique patient's data."""
     ids = [c["ID"] for c in cov_]
     data_by_id = {id_: [] for id_ in ids}
 
@@ -190,11 +188,10 @@ def prepare_data_into_sequences(X_train, y_train, cov_train,
         for id_ in x.keys():
             x[id_], y[id_], cov[id_] = zip(*sorted(zip(x[id_], y[id_], cov[id_]),
                                                    key=lambda p: p[2]["Imaging_Date"]))
-                                                   # key=lambda p: datetime.strptime(p[2].split("_")[5], "%Y-%m-%d")))
 
         # Convert to numpy array
         X_grouped = np.asarray([np.asarray(e) for e in list(x.values())])
-        return X_grouped, np.asarray(list(y.values())), np.asarray(list(cov.values()))
+        return X_grouped, np.asarray(list(y.values()), dtype=object), np.asarray(list(cov.values()), dtype=object)
 
     def get_only_last_visits(t_x, t_y, t_cov):
         """Slice data to get only latest n visits."""
@@ -225,7 +222,6 @@ def prepare_data_into_sequences(X_train, y_train, cov_train,
 
         # if single_target:   # notice that test already has only 1 y-value
         #     y_train = np.array([seq[-1] for seq in y_train])
-        print(len(X_train), len(y_train))
 
     return np.array(X_train), np.array(y_train), np.array(cov_train), np.array(X_test), np.array(y_test), np.array(
         cov_test)
@@ -243,18 +239,30 @@ def parse_cov(cov: str, side=True, age=True, sex=False) -> dict:
 
     try:
         cov_dict["Imaging_Date"] = datetime.strptime(cov_split[6], "%Y-%m-%d")
-    except ValueError:
-        # TODO: Remove?
-        cov_dict["Imaging_Date"] = datetime.now()
+        cov_dict["BL_Date"] = datetime.strptime(cov_split[5], "%Y-%m-%d")  # date of first visit
+
+        if cov_dict["Imaging_Date"].year > datetime.now().year or cov_dict["Imaging_Date"].year < 1990:
+            raise ValueError
+    except ValueError:  # if error in parsing date, return None
+        return None
 
     cov_dict["ID"] = float(cov_split[0])
 
     if age:
-        cov_dict["Age_wks"] = float(cov_split[1])
+        cov_dict["Age_wks"] = float(cov_split[1]) + (cov_dict["Imaging_Date"] - cov_dict["BL_Date"]).days // 7
+
+        if cov_dict["Age_wks"] < 0:
+            print("Negative age detected!")
+            print("Age_wks: ", cov_dict["Age_wks"])
+            print("Imaging_Date: ", cov_dict["Imaging_Date"])
+            print("BL_Date: ", cov_dict["BL_Date"])
+            return None
     if side:
         cov_dict["Side_L"] = 1 if cov_split[4] == 'Left' else 0
     if sex:
         cov_dict["Sex"] = 1 if cov_split[2] == "M" else "F"
+
+    cov_dict.pop("BL_Date")
 
     return cov_dict
 
@@ -269,3 +277,12 @@ def remove_unnecessary_cov(cov):
                 remove_unnecessary_cov(c)
         except TypeError:
             pass
+
+
+def remove_invalid_samples(X, y, cov):
+    """Return (X, y, cov), where all samples with incorrectly parsed covariates are removed (i.e. None)."""
+    filtered_data = []
+    for data in zip(X, y, cov):
+        if data[2] is not None:
+            filtered_data.append(data)
+    return zip(*filtered_data)
