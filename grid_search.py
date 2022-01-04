@@ -45,7 +45,7 @@ class GridSearch:
         """Returns epoch with validation with minimum <metric> value. If cross-fold validation, first average over
         folds
         """
-        df_val = df[df.dset == "val"]
+        df_val = df[(df.dset == "val") & (df.epoch >= 10)]
         df_mean_val = df_val.groupby(by=["epoch"]).mean()
         df_best_epoch = df_mean_val[df_mean_val[metric] == min(df_mean_val[metric])]
         df_best_epoch["dset"] = "val"
@@ -64,7 +64,7 @@ class GridSearch:
         for dir_ in result_directories:
             # Get epoch for best results and model parameters
             df_results = pd.read_csv(f"{dir_}/history.csv")
-            df_best_epoch = self.findBestEpoch(df_results, "loss")
+            df_best_epoch = self.findBestEpoch(df_results, "loss").reset_index()
             self.removeUnnecessaryWeights(dir_, df_best_epoch.epoch.iloc[0] if keep_best_weights else -1000)
 
             # Add in parameters
@@ -123,12 +123,6 @@ class GridSearch:
             df = pd.read_csv(f"{grid_search_dir}/tested_combinations.csv")
             tested_values = df[["batch_size", "lr", "adam", "momentum"]].to_records(index=False).tolist()
             hyperparam_comb = [i for i in hyperparam_comb if i not in tested_values]
-        final_hyperparam_comb = []
-        for batch_size, lr, adam, momentum in hyperparam_comb:
-            if adam and momentum != momentums_[0]:
-                pass
-            else:
-                final_hyperparam_comb.append((batch_size, lr, adam, momentum))
 
         # Limit number of combinations to test
         if n is not None and abs(n) <= len(hyperparam_comb):
@@ -178,24 +172,23 @@ def delete_all_weights():
 if __name__ == "__main__":
     # Global variables
     project_dir = "C:/Users/Stanley Hua/projects/temporal_hydronephrosis/"
-    model_type = "Siamese_Baseline"
+    model_type = "Siamese_ConvPooling"
     keep_best_weights = False
 
     timestamp = datetime.now().strftime("%Y-%m-%d")
-    timestamp = "2021-12-28"
     grid_search_dir = f"{project_dir}/results/{model_type}{'_' if (len(model_type) > 0) else ''}grid_search({timestamp})/"
 
     if not os.path.exists(grid_search_dir):
         os.mkdir(grid_search_dir)
 
-    lrs = [0.00001, 0.0001, 0.001]  # 0.00001, 0.0001, 0.001
+    lrs = [0.00001, 0.0001]  # 0.00001, 0.0001, 0.001
     batch_sizes = [1, 64, 128]  # 6, 12
-    momentums = [0.85, 0.95]  # 0.9, 0.95
+    momentums = [0.8, 0.95]  # 0.9, 0.95
     adams = [True, False]
     num_epochs = 100
 
     gridSearch = GridSearch(model_type, timestamp, grid_search_dir)
-    gridSearch.save_grid_search_results()
-    gridSearch.find_combinations()
-    gridSearch.perform_grid_search(lrs, batch_sizes, momentums, adams, num_epochs)
+    # gridSearch.save_grid_search_results()
+    # gridSearch.find_combinations()
+    gridSearch.perform_grid_search(lrs, batch_sizes, momentums, adams, num_epochs, n=8)
     gridSearch.save_grid_search_results()

@@ -14,8 +14,8 @@ import torch.nn.functional as F
 from sklearn.utils import shuffle
 from torch.autograd import Variable
 
-from models.baselineSiamese import SiamNet
-from models.convPooling import SiamNetConvPooling
+from models.baseline import SiamNet
+from models.conv_pooling import SiamNetConvPooling
 from models.lstm import SiameseLSTM
 from utilities.data_visualizer import plot_loss
 from utilities.dataset_prep import prepare_data_into_sequences, make_validation_set, create_data_loaders, parse_cov, \
@@ -25,16 +25,13 @@ from utilities.results import Results
 warnings.filterwarnings('ignore')
 
 SEED = 42
-# model_name = "Siamese_Baseline"
-# model_name = "Siamese_Baseline_ensemble"
-# model_name = "Siamese_ConvPooling"
-# model_name = "Siamese_ConvPooling_pretrained"
 model_name = ""
 
 project_dir = "C:\\Users\\Stanley Hua\\projects\\temporal_hydronephrosis\\"
 results_dir = f"{project_dir}results\\"
 
 best_hyperparameters_folder = f"{results_dir}LSTM_grid_search(2021-12-11)"
+best_hyperparameters_folder = f'{results_dir}Siamese_Baseline_grid_search(2022-01-02)'
 
 # Paths to save results
 timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
@@ -112,12 +109,12 @@ def modifyArgs(args):
     global model_name
 
     # Model hyperparameters
-    args.lr = 0.0001
-    args.batch_size = 1
+    # args.lr = 0.001
+    # args.batch_size = 1
     args.early_stopping_patience = 100
-    args.save_frequency = 100  # Save weights every x epochs
-    args.include_cov = True
-    args.load_hyperparameters = False
+    args.save_frequency = 1000  # Save weights every x epochs
+    args.include_cov = False
+    args.load_hyperparameters = True
     args.pretrained = False
 
     # Choose model
@@ -137,12 +134,13 @@ def modifyArgs(args):
     if args.model == model_types[0]:  # for single-visit models
         args.standardize_seq_length, args.single_visit, args.single_target = False, True, False
     elif args.model == model_types[1]:
-        args.standardize_seq_length, args.single_visit, args.single_target = False, False, True
-        assert args.batch_size == 1
+        args.standardize_seq_length, args.single_visit, args.single_target = True, False, True
+        # assert args.batch_size == 1
     else:  # for multiple-visit models
         args.standardize_seq_length, args.single_visit, args.single_target = True, False, True
 
     args.balance_classes = False
+    args.num_workers = 4
 
     # Test set parameters
     args.test_only = False  # if true, only perform test
@@ -162,7 +160,8 @@ def load_hyperparameters(hyperparameters: dict, path: str):
     if path is not None and os.path.exists(f"{path}/best_parameters.json"):
         with open(f"{path}/best_parameters.json", "r") as param_file:
             old_params = json.load(param_file)
-        old_params = {k: v for k, v in list(old_params.items()) if k in hyperparameters}
+        hyperparameters['stop_epoch'] = old_params['epoch']
+        old_params = {k: v for k, v in list(old_params.items()) if k in hyperparameters and k != "stop_epoch"}
         hyperparameters.update(old_params)
         print("Previous hyperparameters loaded successfully!")
         print(hyperparameters)
@@ -170,11 +169,11 @@ def load_hyperparameters(hyperparameters: dict, path: str):
 
 def choose_model(args):
     global curr_results_dir, best_hyperparameters_folder, device
-
-    # old_checkpoint = f"{project_dir}/weights/siam_checkpoint_18.pth"
+    old_checkpoint = ""
 
     if args.model == "conv_pool":
         model = SiamNetConvPooling(output_dim=256, device=device, cov_layers=args.include_cov)
+        old_checkpoint = f"{results_dir}/Siamese_Baseline_2022-01-03_11-48-24/model-epoch_38-fold1.pth"
     elif args.model == "lstm":
         model = SiameseLSTM(output_dim=256, batch_size=args.batch_size,
                             bidirectional=True,
@@ -189,21 +188,20 @@ def choose_model(args):
         raise NotImplementedError("STGRU has not yet been implemented!")
     else:  # baseline single-visit
         model = SiamNet(output_dim=256, device=device, cov_layers=args.include_cov)
+        old_checkpoint = f"{results_dir}/Siamese_Baseline_2022-01-03_11-48-24/model-epoch_38-fold1.pth"
 
     # Load weights
     if args.pretrained:
-        # TODO: Change old_checkpoint
         model.load(old_checkpoint)
     return model.to(device)
 
 
 def init_weights(m):
     """Perform Kaiming (zero-mean) initialization for conv and linear layers."""
-    if not isinstance(m, torch.nn.Linear) and not isinstance(m, torch.nn.Conv2d):
+    if not isinstance(m, torch.nn.Linear):
         return
 
     torch.nn.init.kaiming_normal_(m.weight, mode='fan_out', nonlinearity='relu')
-    # torch.nn.init.xavier_uniform(m.weight)
     m.bias.data.fill_(0.01)
 
 
@@ -233,7 +231,7 @@ def train(args, X_train, y_train, cov_train, X_test, y_test, cov_test, X_val=Non
     # Create model. Initialize weights
     net = choose_model(args)
     net.zero_grad()
-    net.apply(init_weights)
+    # net.apply(init_weights)
 
     # Save/load in the best hyperparameters if available
     hyperparams = {'lr': args.lr, "batch_size": args.batch_size,
@@ -247,6 +245,8 @@ def train(args, X_train, y_train, cov_train, X_test, y_test, cov_test, X_val=Non
                    }
     if args.load_hyperparameters:
         load_hyperparameters(hyperparams, best_hyperparameters_folder)
+        # args.save_frequency = hyperparams['stop_epoch']
+        # args.stop_epoch = hyperparams['stop_epoch']
 
     if args.adam:
         optimizer = torch.optim.Adam(net.parameters(), lr=hyperparams['lr'],
@@ -256,15 +256,16 @@ def train(args, X_train, y_train, cov_train, X_test, y_test, cov_test, X_val=Non
                                     weight_decay=hyperparams['weight_decay'])
     params = {'batch_size': hyperparams["batch_size"],
               'shuffle': True,
-              'num_workers': args.num_workers}
+              'num_workers': args.num_workers,
+              'pin_memory': True
+              }
 
     # Validation/test set contains batch size of 1 to avoid interference from zero-padding varying sequence length
     val_test_params = params.copy()
-    # val_test_params["batch_size"] = 1     # TODO: Remove this
+    val_test_params["batch_size"] = 1     # TODO: Remove this
 
     # Be careful to not shuffle order of image seq within a patient
     X_train, y_train, cov_train = shuffle(X_train, y_train, cov_train, random_state=SEED)
-
     # Datasets
     training_generator, val_generator, test_generator = create_data_loaders(X_train, y_train, cov_train, X_val, y_val,
                                                                             cov_val, X_test, y_test, cov_test,
@@ -292,21 +293,18 @@ def train(args, X_train, y_train, cov_train, X_test, y_test, cov_test, X_val=Non
 
                 # if sequence length is standardized, <data> is a tuple of data, sequence lengths
                 if args.standardize_seq_length:
-                    x = data[0].to(device)
+                    x = data[0].to(device, non_blocking=True)
                     x_lengths = torch.from_numpy(data[1])
                     data = (x, x_lengths)
                 else:
-                    data = data.to(device)
+                    data = data.to(device, non_blocking=True)
 
                 # if include covariate, pack in tuple
                 if args.include_cov:
                     data = (data, cov)
-
                 output = net(data)
 
-                target = torch.tensor(target)
-                target = Variable(target.type(torch.LongTensor), requires_grad=False).to(device)
-
+                target = torch.tensor(target, requires_grad=False).type(torch.LongTensor).to(device, non_blocking=True)
                 loss = F.cross_entropy(output, target)
                 res.loss_accum_train += loss.item() * len(target)
                 loss.backward()
@@ -335,19 +333,18 @@ def train(args, X_train, y_train, cov_train, X_test, y_test, cov_test, X_val=Non
 
                         # if sequence length is standardized, <data> is a tuple of data, sequence lengths
                         if args.standardize_seq_length:
-                            x = data[0].to(device)
+                            x = data[0].to(device, non_blocking=True)
                             x_lengths = torch.from_numpy(data[1])
                             data = (x, x_lengths)
                         else:
-                            data = data.to(device)
+                            data = data.to(device, non_blocking=True)
 
                         # if include covariate, pack in tuple
                         if args.include_cov:
                             data = (data, cov)
 
                         output = net(data)
-                        target = torch.tensor(target)
-                        target = target.type(torch.LongTensor).to(device)
+                        target = torch.tensor(target).type(torch.LongTensor).to(device, non_blocking=True)
                         loss = F.cross_entropy(output, target)
                         res.loss_accum_val += loss.item() * len(target)
                         res.counter_val += len(target)
@@ -389,19 +386,18 @@ def train(args, X_train, y_train, cov_train, X_test, y_test, cov_test, X_val=Non
 
                 # if sequence length is standardized, <data> is a tuple of data, sequence lengths
                 if args.standardize_seq_length:
-                    x = data[0].to(device)
+                    x = data[0].to(device, non_blocking=True)
                     x_lengths = torch.from_numpy(data[1])
                     data = (x, x_lengths)
                 else:
-                    data = data.to(device)
+                    data = data.to(device, non_blocking=True)
 
                 # if include covariate, pack in tuple
                 if args.include_cov:
                     data = (data, cov)
 
                 output = net(data)
-                target = torch.tensor(target)
-                target = target.type(torch.LongTensor).to(device)
+                target = torch.tensor(target).type(torch.LongTensor).to(device)
                 loss = F.cross_entropy(output, target)
                 res.loss_accum_test += loss.item() * len(target)
                 res.counter_test += len(target)
@@ -493,7 +489,6 @@ def main():
                                                                                         X_test, y_test, cov_test,
                                                                                         single_visit=args.single_visit,
                                                                                         single_target=args.single_target)
-
     # Remove ID and imaging date from covariates
     remove_unnecessary_cov(cov_train)
     remove_unnecessary_cov(cov_test)

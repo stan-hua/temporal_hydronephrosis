@@ -57,33 +57,43 @@ class SiamNet(nn.Module):
         self.fc6c = nn.Sequential()
         self.fc6c.add_module('fc7', nn.Linear(256 * 3 * 3, 512))
         self.fc6c.add_module('relu7', nn.ReLU(inplace=True))
-        # self.fc6c.add_module('drop7', nn.Dropout(p=dropout_rate))
+        self.fc6c.add_module('drop7', nn.Dropout(p=dropout_rate))
 
+        # modified
         self.fc7_new = nn.Sequential()
-        self.fc7_new.add_module('fc7', nn.Linear(self.num_inputs * 512, self.output_dim))
+        self.fc7_new.add_module('fc7', nn.Linear((self.num_inputs + (2 if self.cov_layers else 0)) * 512, 512))
         self.fc7_new.add_module('relu7', nn.ReLU(inplace=True))
         # self.fc7_new.add_module('drop7', nn.Dropout(p=dropout_rate))
 
+        # modified
+        self.fc8 = nn.Sequential()
+        self.fc8.add_module('fc8', nn.Linear(512, self.output_dim))
+        self.fc8.add_module('relu8', nn.ReLU(inplace=True))
+        # self.fc8.add_module('drop8', nn.Dropout(p=dropout_rate))
+
         self.classifier_new = nn.Sequential()
-        self.classifier_new.add_module('fc8', nn.Linear(self.output_dim, classes))
+        self.classifier_new.add_module('fc9', nn.Linear(self.output_dim, classes))      # changed fc8 -> fc9
 
-        if self.cov_layers:
-            self.classifier_new.add_module('relu8', nn.ReLU(inplace=True))
-
-            self.add_covs1 = nn.Sequential()
-            self.add_covs1.add_module('fc9', nn.Linear(classes + 2, classes + 126))
-            self.add_covs1.add_module('relu9', nn.ReLU(inplace=True))
-
-            self.add_covs2 = nn.Sequential()
-            self.add_covs2.add_module('fc10', nn.Linear(classes + 126, classes))
+        # if self.cov_layers:
+        #     # self.classifier_new.add_module('relu8', nn.ReLU(inplace=True))
+        #
+        #     self.add_covs1 = nn.Sequential()
+        #     self.add_covs1.add_module('fc9', nn.Linear(classes + 2, classes + 126))
+        #     self.add_covs1.add_module('relu9', nn.ReLU(inplace=True))
+        #
+        #     self.add_covs2 = nn.Sequential()
+        #     self.add_covs2.add_module('fc10', nn.Linear(classes + 126, classes))
 
     def load(self, checkpoint):
         model_dict = self.state_dict()
-        pretrained_dict = torch.load(checkpoint)["model_state_dict"]
+        pretrained_dict = torch.load(checkpoint)
+
+        if 'model_state_dict' in pretrained_dict.keys():
+            pretrained_dict = pretrained_dict["model_state_dict"]
         pretrained_dict = {k: v for k, v in list(pretrained_dict.items()) if k in model_dict}
+
         model_dict.update(pretrained_dict)
         self.load_state_dict(model_dict)
-        # print([k for k, v in list(pretrained_dict.items())])
 
     def save(self, checkpoint):
         torch.save(self.state_dict(), checkpoint)
@@ -100,13 +110,13 @@ class SiamNet(nn.Module):
         x_list = []
         for i in range(self.num_inputs):
             curr_x = torch.unsqueeze(x[i], 1)
-
-            # Grayscale to RGB
             curr_x = curr_x.expand(-1, 3, -1, -1)
+
             if torch.cuda.is_available():
-                input_ = torch.cuda.FloatTensor(curr_x.to(self.device))
+                input_ = torch.cuda.FloatTensor(curr_x.to(device))
             else:
-                input_ = torch.FloatTensor(curr_x.to(self.device))
+                input_ = torch.FloatTensor(curr_x.to(device))
+
             z = self.conv(input_)
             z = self.fc6(z)
             z = self.fc6b(z)
@@ -116,16 +126,19 @@ class SiamNet(nn.Module):
             x_list.append(z)
 
         x = torch.cat(x_list, 1)
-        x = self.fc7_new(x.view(B, -1))
-        pred = self.classifier_new(x)
+        x = x.view(B, -1)
 
         if self.cov_layers:
-            age = in_dict['Age_wks'].type(torch.FloatTensor).to(self.device).view(B, 1)
-            side = in_dict['Side_L'].type(torch.FloatTensor).to(self.device).view(B, 1)
-            mid_in = torch.cat((pred, age, side), 1)
+            age = in_dict['Age_wks'].type(torch.FloatTensor).to(self.device, non_blocking=True).view(B, 1)
+            side = in_dict['Side_L'].type(torch.FloatTensor).to(self.device, non_blocking=True).view(B, 1)
 
-            x = self.add_covs1(mid_in)
-            pred = self.add_covs2(x)
+            age = age.expand(-1, 512)
+            side = side.expand(-1, 512)
+            x = torch.cat((x, age, side), 1)
+
+        x = self.fc7_new(x)
+        x = self.fc8(x)
+        pred = self.classifier_new(x)
 
         return pred
 

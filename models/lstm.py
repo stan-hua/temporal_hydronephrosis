@@ -6,7 +6,7 @@ import torch
 from torch import nn
 from torch.nn.utils.rnn import pack_padded_sequence, pad_packed_sequence
 
-from models.baselineSiamese import SiamNet
+from models.baseline import SiamNet
 
 
 # noinspection PyTypeChecker,PyUnboundLocalVariable
@@ -82,14 +82,8 @@ class SiameseLSTM(SiamNet):
             x_list = []
             for i in range(self.num_inputs):
                 curr_x = torch.unsqueeze(x[i], 1)
-
-                # Grayscale to RGB
                 curr_x = curr_x.expand(-1, 3, -1, -1)
-                if torch.cuda.is_available():
-                    input_ = torch.cuda.FloatTensor(curr_x.to(self.device))
-                else:
-                    input_ = torch.FloatTensor(curr_x.to(self.device))
-                z = self.conv(input_)
+                z = self.conv(curr_x)
                 z = self.fc6(z)
                 z = self.fc6b(z)
                 z = z.view([B, 1, -1])

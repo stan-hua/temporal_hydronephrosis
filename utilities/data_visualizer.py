@@ -198,10 +198,10 @@ def describe_data(train_set, val_set):
 
     data_viewer = DataViewer(X_train_, y_train_, cov_train_,
                              X_val_, y_val_, cov_val_)
-    data_viewer.show_num_visits(positive_only=True)
-    data_viewer.show_num_patients()
+    # data_viewer.show_num_visits(positive_only=True)
+    # data_viewer.show_num_patients()
     data_viewer.plot_cov_distribution()
-    data_viewer.plot_imaging_date_frequencies()
+    # data_viewer.plot_imaging_date_frequencies()
 
 
 if __name__ == "__main__":
@@ -218,7 +218,7 @@ if __name__ == "__main__":
                                                                                               single_visit=True,
                                                                                               single_target=False)
 
-    describe_data((X_train_, y_train_, cov_train_), (X_test_, y_test_, cov_test_))
+    # describe_data((X_train_, y_train_, cov_train_), (X_test_, y_test_, cov_test_))
 
     train_val_generator = make_validation_set(X_train_, y_train_, cov_train_, cv=True, num_folds=5)
     i = 1

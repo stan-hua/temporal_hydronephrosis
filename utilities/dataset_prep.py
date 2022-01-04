@@ -23,7 +23,6 @@ class KidneyDataset(torch.utils.data.Dataset):
 
     def __getitem__(self, index):
         imgs, target, cov = self.X[index], self.y[index], self.cov[index]
-
         return imgs, target, cov
 
     def __len__(self):
@@ -77,8 +76,8 @@ def recreate_train_test_split(X_train, y_train, cov_train,
         - <cov_train> and <cov_test> have been parsed into dictionaries.
     """
     X = np.concatenate([X_train, X_test])
-    y = np.concatenate([y_train, y_test])
-    cov = np.concatenate([cov_train, cov_test])
+    y = y_train + y_test
+    cov = cov_train + cov_test
 
     data_by_patients = group_data_by_ID(X, y, cov)
     data_by_patients = shuffle(data_by_patients, random_state=1)
@@ -122,23 +121,29 @@ def pad_collate(batch):
 
     @returns tuple containing (padded X, y, cov and length of each sequence in batch)
     """
-    (x_t, y_t, cov_t) = zip(*batch)
-
+    x_t, y_t, cov_t = zip(*batch)
     x_lens = [len(x) for x in x_t]
     x_pad = pad_sequence(x_t, batch_first=True, padding_value=0)
 
     # Perform padding in-place (for target and covariates)
+    y_t = [list(y) if not isinstance(y, np.int32) else y for y in y_t]
     for y in y_t:
         if isinstance(y, list) and (len(y) != max(x_lens)):  # zero-padding
             y.extend([0] * abs(len(y) - max(x_lens)))
             assert len(y) == max(x_lens)
 
     for cov in cov_t:
-        if len(cov) != max(x_lens):  # pad with empty dictionary
-            cov.extend([{}] * abs(len(cov) - max(x_lens)))
-            assert len(cov) == max(x_lens)
+        if len(cov["Side_L"]) != max(x_lens):  # pad with empty dictionary
+            cov["Side_L"].extend([0.] * abs(len(cov["Side_L"]) - max(x_lens)))
+            cov["Age_wks"].extend([0.] * abs(len(cov["Side_L"]) - max(x_lens)))
+            assert len(cov["Side_L"]) == max(x_lens)
+    # TODO: Fix this
+    # side_t = zip([np.array(cov["Side_L"]) for cov in cov_t])
+    # age_t = zip([np.array(cov["Age_wks"]) for cov in cov_t])
+    # covs = {"Age_wks": np.array([cov['Age_wks'][t] for cov in cov_t]),
+    #         "Side_L": np.array([cov['Side_L'][t] for cov in cov_t])}
 
-    return (x_pad, np.array(x_lens)), y_t, cov_t
+    return (x_pad, np.array(x_lens)), np.array(y_t), np.array(cov_t)
 
 
 def split_data(data, split: int):
@@ -189,6 +194,10 @@ def prepare_data_into_sequences(X_train, y_train, cov_train,
             x[id_], y[id_], cov[id_] = zip(*sorted(zip(x[id_], y[id_], cov[id_]),
                                                    key=lambda p: p[2]["Imaging_Date"]))
 
+        for id_ in cov.keys():
+            cov[id_] = {u: [cov_[u] for cov_ in cov[id_]] for u, v in cov[id_][0].items()}
+            cov[id_]['ID'] = cov[id_]['ID'][0]
+
         # Convert to numpy array
         X_grouped = np.asarray([np.asarray(e) for e in list(x.values())])
         return X_grouped, np.asarray(list(y.values()), dtype=object), np.asarray(list(cov.values()), dtype=object)
@@ -202,7 +211,9 @@ def prepare_data_into_sequences(X_train, y_train, cov_train,
             curr_x = curr_x.squeeze()
             x.append(curr_x)
             y.append(t_y[i][-1])
-            cov.append(t_cov[i][-1])
+            # cov.append(t_cov[i][-1])
+            cov.append({u: v[-1] if not isinstance(v, float) else v for u, v in t_cov[i].items()})
+
         return np.asarray(x, dtype=np.float64), y, cov
 
     X_train, y_train, cov_train = sort_data_by_ID(X_train, y_train, cov_train)
@@ -223,8 +234,7 @@ def prepare_data_into_sequences(X_train, y_train, cov_train,
         # if single_target:   # notice that test already has only 1 y-value
         #     y_train = np.array([seq[-1] for seq in y_train])
 
-    return np.array(X_train), np.array(y_train), np.array(cov_train), np.array(X_test), np.array(y_test), np.array(
-        cov_test)
+    return np.array(X_train), np.array(y_train), np.array(cov_train), np.array(X_test), np.array(y_test), np.array(cov_test)
 
 
 def parse_cov(cov: str, side=True, age=True, sex=False) -> dict:
@@ -236,7 +246,6 @@ def parse_cov(cov: str, side=True, age=True, sex=False) -> dict:
 
     cov_dict = {}
     cov_split = cov.split("_")
-
     try:
         cov_dict["Imaging_Date"] = datetime.strptime(cov_split[6], "%Y-%m-%d")
         cov_dict["BL_Date"] = datetime.strptime(cov_split[5], "%Y-%m-%d")  # date of first visit
@@ -249,7 +258,8 @@ def parse_cov(cov: str, side=True, age=True, sex=False) -> dict:
     cov_dict["ID"] = float(cov_split[0])
 
     if age:
-        cov_dict["Age_wks"] = float(cov_split[1]) + (cov_dict["Imaging_Date"] - cov_dict["BL_Date"]).days // 7
+        cov_dict["Age_wks"] = float(cov_split[1]) \
+                                + (cov_dict["Imaging_Date"] - cov_dict["BL_Date"]).days // 7
 
         if cov_dict["Age_wks"] < 0:
             print("Negative age detected!")
@@ -262,8 +272,6 @@ def parse_cov(cov: str, side=True, age=True, sex=False) -> dict:
     if sex:
         cov_dict["Sex"] = 1 if cov_split[2] == "M" else "F"
 
-    cov_dict.pop("BL_Date")
-
     return cov_dict
 
 
@@ -271,6 +279,7 @@ def remove_unnecessary_cov(cov):
     if isinstance(cov, dict):
         cov.pop("ID")
         cov.pop("Imaging_Date")
+        cov.pop("BL_Date")
     else:
         try:
             for c in cov:
@@ -285,4 +294,5 @@ def remove_invalid_samples(X, y, cov):
     for data in zip(X, y, cov):
         if data[2] is not None:
             filtered_data.append(data)
+
     return zip(*filtered_data)
