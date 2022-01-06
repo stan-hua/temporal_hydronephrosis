@@ -4,17 +4,14 @@
     <option name="SCOPE_TYPE" value="3" />
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="2e439ead-1cec-4da4-9021-fd0df7818330" name="Changes" comment="Changed baseline model!&#10;# Updated parsing of covariate (age)">
-      <change afterPath="$PROJECT_DIR$/models/tsm_blocks.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/.gitignore" beforeDir="false" afterPath="$PROJECT_DIR$/.gitignore" afterDir="false" />
+    <list default="true" id="2e439ead-1cec-4da4-9021-fd0df7818330" name="Changes" comment="Changes to model_training.py.&#10;Updated TSM">
+      <change beforePath="$PROJECT_DIR$/../nephronetwork/1.Models/siamese_network/train_resnet-vgg_lstm.py" beforeDir="false" afterPath="$PROJECT_DIR$/../nephronetwork/1.Models/siamese_network/train_resnet-vgg_lstm.py" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/grid_search.py" beforeDir="false" afterPath="$PROJECT_DIR$/grid_search.py" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/model_training.py" beforeDir="false" afterPath="$PROJECT_DIR$/model_training.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/models/baselineSiamese.py" beforeDir="false" afterPath="$PROJECT_DIR$/models/baseline.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/models/convPooling.py" beforeDir="false" afterPath="$PROJECT_DIR$/models/conv_pooling.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/models/baseline.py" beforeDir="false" afterPath="$PROJECT_DIR$/models/baseline.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/models/conv_pooling.py" beforeDir="false" afterPath="$PROJECT_DIR$/models/conv_pooling.py" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/models/lstm.py" beforeDir="false" afterPath="$PROJECT_DIR$/models/lstm.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/models/tsm.py" beforeDir="false" afterPath="$PROJECT_DIR$/models/tsm.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/utilities/data_visualizer.py" beforeDir="false" afterPath="$PROJECT_DIR$/utilities/data_visualizer.py" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/utilities/dataset_prep.py" beforeDir="false" afterPath="$PROJECT_DIR$/utilities/dataset_prep.py" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
@@ -229,19 +226,16 @@
       <option name="INPUT_FILE" value="" />
       <method v="2" />
     </configuration>
-    <configuration name="train_siamese_network_CV_v3_STStanTest" type="PythonConfigurationType" factoryName="Python" temporary="true" nameIsGenerated="true">
+    <configuration name="train_resnet-vgg_lstm" type="PythonConfigurationType" factoryName="Python" temporary="true" nameIsGenerated="true">
       <module name="nephronetwork" />
       <option name="INTERPRETER_OPTIONS" value="" />
       <option name="PARENT_ENVS" value="true" />
-      <envs>
-        <env name="PYTHONUNBUFFERED" value="1" />
-      </envs>
       <option name="SDK_HOME" value="C:\Users\Stanley Hua\Anaconda3\envs\DL\python.exe" />
       <option name="WORKING_DIRECTORY" value="$PROJECT_DIR$/.." />
       <option name="IS_MODULE_SDK" value="true" />
       <option name="ADD_CONTENT_ROOTS" value="true" />
       <option name="ADD_SOURCE_ROOTS" value="true" />
-      <option name="SCRIPT_NAME" value="$PROJECT_DIR$/../nephronetwork/1.Models/siamese_network/train_siamese_network_CV_v3_STStanTest.py" />
+      <option name="SCRIPT_NAME" value="$PROJECT_DIR$/../nephronetwork/1.Models/siamese_network/train_resnet-vgg_lstm.py" />
       <option name="PARAMETERS" value="" />
       <option name="SHOW_COMMAND_LINE" value="true" />
       <option name="EMULATE_TERMINAL" value="false" />
@@ -272,21 +266,21 @@
       <method v="2" />
     </configuration>
     <list>
-      <item itemvalue="Python.data_visualizer" />
-      <item itemvalue="Python.dataset_prep" />
-      <item itemvalue="Python.grid_search" />
-      <item itemvalue="Python.model_training" />
       <item itemvalue="Python.temporal_hydronephrosis" />
-      <item itemvalue="Python.train_siamese_network_CV_v3_STStanTest" />
+      <item itemvalue="Python.model_training" />
+      <item itemvalue="Python.data_visualizer" />
+      <item itemvalue="Python.grid_search" />
+      <item itemvalue="Python.dataset_prep" />
       <item itemvalue="Python.tsm_blocks" />
+      <item itemvalue="Python.train_resnet-vgg_lstm" />
     </list>
     <recent_temporary>
       <list>
+        <item itemvalue="Python.train_resnet-vgg_lstm" />
         <item itemvalue="Python.grid_search" />
         <item itemvalue="Python.data_visualizer" />
         <item itemvalue="Python.grid_search" />
         <item itemvalue="Python.tsm_blocks" />
-        <item itemvalue="Python.dataset_prep" />
       </list>
     </recent_temporary>
   </component>
@@ -334,7 +328,14 @@
       <option name="project" value="LOCAL" />
       <updated>1640814305536</updated>
     </task>
-    <option name="localTasksCounter" value="6" />
+    <task id="LOCAL-00006" summary="Changes to model_training.py.&#10;Updated TSM">
+      <created>1641328577134</created>
+      <option name="number" value="00006" />
+      <option name="presentableId" value="LOCAL-00006" />
+      <option name="project" value="LOCAL" />
+      <updated>1641328577134</updated>
+    </task>
+    <option name="localTasksCounter" value="7" />
     <servers />
   </component>
   <component name="Vcs.Log.Tabs.Properties">
@@ -367,6 +368,7 @@
     <MESSAGE value="Fixed code issues in Kaiming initialization and logical issues in hyperparameter search." />
     <MESSAGE value="Added alternative locations to insert LSTM. &#10;&#10;Recreated train-test split to allow more positive patients with longer sequences in the test set.&#10;&#10;Added TSM code fromm original paper." />
     <MESSAGE value="# Updated parsing for covariate (age) in dataset_prep.py. &#10;# Added EDA in data_visualizer.py.&#10;# Changed exhaustive grid search to randomized grid search, and added feature to save used combinations." />
-    <option name="LAST_COMMIT_MESSAGE" value="# Updated parsing for covariate (age) in dataset_prep.py. &#10;# Added EDA in data_visualizer.py.&#10;# Changed exhaustive grid search to randomized grid search, and added feature to save used combinations." />
+    <MESSAGE value="Changes to model_training.py.&#10;Updated TSM" />
+    <option name="LAST_COMMIT_MESSAGE" value="Changes to model_training.py.&#10;Updated TSM" />
   </component>
 </project>

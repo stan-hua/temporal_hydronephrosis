@@ -17,38 +17,38 @@ class SiamNet(nn.Module):
 
         # CONVOLUTIONAL BLOCKS
         self.conv = nn.Sequential()
-        self.conv.add_module('conv1_s1', nn.Conv2d(3, 96, kernel_size=11, stride=2, padding=0))
+        self.conv.add_module('conv1_s1', nn.Conv2d(3, 96, kernel_size=11, stride=2, padding=0, bias=False))
         self.conv.add_module('batch1_s1', nn.BatchNorm2d(96))
         self.conv.add_module('relu1_s1', nn.ReLU(inplace=True))
         self.conv.add_module('pool1_s1', nn.MaxPool2d(kernel_size=3, stride=2))
         self.conv.add_module('lrn1_s1', LRN(local_size=5, alpha=0.0001, beta=0.75))
 
-        self.conv.add_module('conv2_s1', nn.Conv2d(96, 256, kernel_size=5, padding=2, groups=2))
+        self.conv.add_module('conv2_s1', nn.Conv2d(96, 256, kernel_size=5, padding=2, groups=2, bias=False))
         self.conv.add_module('batch2_s1', nn.BatchNorm2d(256))
         self.conv.add_module('relu2_s1', nn.ReLU(inplace=True))
         self.conv.add_module('pool2_s1', nn.MaxPool2d(kernel_size=3, stride=2))
         self.conv.add_module('lrn2_s1', LRN(local_size=5, alpha=0.0001, beta=0.75))
 
-        self.conv.add_module('conv3_s1', nn.Conv2d(256, 384, kernel_size=3, padding=1))
+        self.conv.add_module('conv3_s1', nn.Conv2d(256, 384, kernel_size=3, padding=1, bias=False))
         self.conv.add_module('batch3_s1', nn.BatchNorm2d(384))
         self.conv.add_module('relu3_s1', nn.ReLU(inplace=True))
 
-        self.conv.add_module('conv4_s1', nn.Conv2d(384, 384, kernel_size=3, padding=1, groups=2))
+        self.conv.add_module('conv4_s1', nn.Conv2d(384, 384, kernel_size=3, padding=1, groups=2, bias=False))
         self.conv.add_module('batch4_s1', nn.BatchNorm2d(384))
         self.conv.add_module('relu4_s1', nn.ReLU(inplace=True))
 
-        self.conv.add_module('conv5_s1', nn.Conv2d(384, 256, kernel_size=3, padding=1, groups=2))
+        self.conv.add_module('conv5_s1', nn.Conv2d(384, 256, kernel_size=3, padding=1, groups=2, bias=False))
         self.conv.add_module('batch5_s1', nn.BatchNorm2d(256))
         self.conv.add_module('relu5_s1', nn.ReLU(inplace=True))
         self.conv.add_module('pool5_s1', nn.MaxPool2d(kernel_size=3, stride=2))
 
         self.fc6 = nn.Sequential()
-        self.fc6.add_module('fc6_s1', nn.Conv2d(256, 1024, kernel_size=2, stride=1, padding=1))
+        self.fc6.add_module('fc6_s1', nn.Conv2d(256, 1024, kernel_size=2, stride=1, padding=1, bias=False))
         self.fc6.add_module('batch6_s1', nn.BatchNorm2d(1024))
         self.fc6.add_module('relu6_s1', nn.ReLU(inplace=True))
 
         self.fc6b = nn.Sequential()
-        self.fc6b.add_module('conv6b_s1', nn.Conv2d(1024, 256, kernel_size=3, stride=2))
+        self.fc6b.add_module('conv6b_s1', nn.Conv2d(1024, 256, kernel_size=3, stride=2, bias=False))
         self.fc6b.add_module('batch6b_s1', nn.BatchNorm2d(256))
         self.fc6b.add_module('relu6_s1', nn.ReLU(inplace=True))
         self.fc6b.add_module('pool6b_s1', nn.MaxPool2d(kernel_size=3, stride=2))
@@ -63,13 +63,13 @@ class SiamNet(nn.Module):
         self.fc7_new = nn.Sequential()
         self.fc7_new.add_module('fc7', nn.Linear((self.num_inputs + (2 if self.cov_layers else 0)) * 512, 512))
         self.fc7_new.add_module('relu7', nn.ReLU(inplace=True))
-        # self.fc7_new.add_module('drop7', nn.Dropout(p=dropout_rate))
+        self.fc7_new.add_module('drop7', nn.Dropout(p=dropout_rate))
 
         # modified
         self.fc8 = nn.Sequential()
         self.fc8.add_module('fc8', nn.Linear(512, self.output_dim))
         self.fc8.add_module('relu8', nn.ReLU(inplace=True))
-        # self.fc8.add_module('drop8', nn.Dropout(p=dropout_rate))
+        self.fc8.add_module('drop8', nn.Dropout(p=dropout_rate))
 
         self.classifier_new = nn.Sequential()
         self.classifier_new.add_module('fc9', nn.Linear(self.output_dim, classes))      # changed fc8 -> fc9
@@ -98,12 +98,11 @@ class SiamNet(nn.Module):
     def save(self, checkpoint):
         torch.save(self.state_dict(), checkpoint)
 
-    def forward(self, x):
-        if self.cov_layers:
-            x, in_dict = x
+    def forward(self, data):
+        x = data['img']
 
-        if self.num_inputs == 1:
-            x = x.unsqueeze(1)
+        if self.cov_layers:
+            cov_dict = data['cov']
 
         B, T, C, H = x.size()
         x = x.transpose(0, 1)
@@ -113,11 +112,11 @@ class SiamNet(nn.Module):
             curr_x = curr_x.expand(-1, 3, -1, -1)
 
             if torch.cuda.is_available():
-                input_ = torch.cuda.FloatTensor(curr_x.to(device))
+                curr_x = torch.cuda.FloatTensor(curr_x.to(self.device))
             else:
-                input_ = torch.FloatTensor(curr_x.to(device))
+                curr_x = torch.FloatTensor(curr_x.to(self.device))
 
-            z = self.conv(input_)
+            z = self.conv(curr_x)
             z = self.fc6(z)
             z = self.fc6b(z)
             z = z.view([B, 1, -1])
@@ -129,8 +128,8 @@ class SiamNet(nn.Module):
         x = x.view(B, -1)
 
         if self.cov_layers:
-            age = in_dict['Age_wks'].type(torch.FloatTensor).to(self.device, non_blocking=True).view(B, 1)
-            side = in_dict['Side_L'].type(torch.FloatTensor).to(self.device, non_blocking=True).view(B, 1)
+            age = cov_dict['Age_wks'].type(torch.FloatTensor).to(self.device, non_blocking=True).view(B, 1)
+            side = cov_dict['Side_L'].type(torch.FloatTensor).to(self.device, non_blocking=True).view(B, 1)
 
             age = age.expand(-1, 512)
             side = side.expand(-1, 512)

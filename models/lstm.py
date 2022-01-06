@@ -53,12 +53,11 @@ class SiameseLSTM(SiamNet):
 
         @param data: tuple containing sequence of images X, their lengths, and optionally covariates.
         """
+        x_t = data['img']
+        x_lengths = data['length']
+
         if self.cov_layers:
-            data, in_dict = data
-            x_t, x_lengths = data
-            x_t = x_t, in_dict
-        else:
-            x_t, x_lengths = data
+            cov_dict = data['cov']
 
         if self.insert_where == 0:
             out = self._embed_after_conv(x_t, x_lengths)
@@ -109,16 +108,6 @@ class SiameseLSTM(SiamNet):
         # Use last hidden state
         pred = self.classifier_new(h_f[-1])
 
-        if self.cov_layers:
-            self.classifier_new.add_module('relu8', nn.ReLU(inplace=True))
-
-            self.add_covs1 = nn.Sequential()
-            self.add_covs1.add_module('fc9', nn.Linear(classes + 2, classes + 126))
-            self.add_covs1.add_module('relu9', nn.ReLU(inplace=True))
-
-            self.add_covs2 = nn.Sequential()
-            self.add_covs2.add_module('fc10', nn.Linear(classes + 126, classes))
-
         return pred
 
     # TODO: Do this
@@ -158,16 +147,6 @@ class SiameseLSTM(SiamNet):
         x = pack_padded_sequence(x, x_lengths, batch_first=True, enforce_sorted=False)
         lstm_out, (h_f, _) = self.lstm(x)
         pred = self.classifier_new(h_f[-1])
-
-        if self.cov_layers:
-            self.classifier_new.add_module('relu8', nn.ReLU(inplace=True))
-
-            self.add_covs1 = nn.Sequential()
-            self.add_covs1.add_module('fc9', nn.Linear(classes + 2, classes + 126))
-            self.add_covs1.add_module('relu9', nn.ReLU(inplace=True))
-
-            self.add_covs2 = nn.Sequential()
-            self.add_covs2.add_module('fc10', nn.Linear(classes + 126, classes))
 
         return pred
 
@@ -209,15 +188,5 @@ class SiameseLSTM(SiamNet):
         x = pack_padded_sequence(x, x_lengths, batch_first=True, enforce_sorted=False)
         lstm_out, (h_f, _) = self.lstm(x)
         pred = self.classifier_new(h_f[-1])
-
-        if self.cov_layers:
-            self.classifier_new.add_module('relu8', nn.ReLU(inplace=True))
-
-            self.add_covs1 = nn.Sequential()
-            self.add_covs1.add_module('fc9', nn.Linear(classes + 2, classes + 126))
-            self.add_covs1.add_module('relu9', nn.ReLU(inplace=True))
-
-            self.add_covs2 = nn.Sequential()
-            self.add_covs2.add_module('fc10', nn.Linear(classes + 126, classes))
 
         return pred

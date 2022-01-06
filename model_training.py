@@ -51,8 +51,8 @@ device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 softmax = torch.nn.Softmax(dim=1)
 
 # Clear unused data
-if torch.cuda.is_available():
-    torch.cuda.empty_cache()
+# if torch.cuda.is_available():
+#     torch.cuda.empty_cache()
 
 
 # Defining data/model parameters
@@ -109,17 +109,21 @@ def modifyArgs(args):
     global model_name
 
     # Model hyperparameters
-    # args.lr = 0.001
-    # args.batch_size = 1
+    args.lr = 0.0001
+    args.batch_size = 13
+    args.adam = True
+    args.momentum = 0.8
+    args.weight_decay = 0.0005
+
     args.early_stopping_patience = 100
     args.save_frequency = 1000  # Save weights every x epochs
     args.include_cov = False
-    args.load_hyperparameters = True
+    args.load_hyperparameters = False
     args.pretrained = False
 
     # Choose model
     model_types = ["baseline", "conv_pool", "lstm", "tsm", "stgru"]
-    args.model = model_types[0]
+    args.model = model_types[1]
 
     if args.model == "baseline":
         model_name = "Siamese_Baseline"
@@ -257,12 +261,13 @@ def train(args, X_train, y_train, cov_train, X_test, y_test, cov_test, X_val=Non
     params = {'batch_size': hyperparams["batch_size"],
               'shuffle': True,
               'num_workers': args.num_workers,
-              'pin_memory': True
+              'pin_memory': True,
+              'persistent_workers': True,
               }
 
     # Validation/test set contains batch size of 1 to avoid interference from zero-padding varying sequence length
     val_test_params = params.copy()
-    val_test_params["batch_size"] = 1     # TODO: Remove this
+    # val_test_params["batch_size"] = 1     # TODO: Remove this
 
     # Be careful to not shuffle order of image seq within a patient
     X_train, y_train, cov_train = shuffle(X_train, y_train, cov_train, random_state=SEED)
@@ -286,30 +291,27 @@ def train(args, X_train, y_train, cov_train, X_test, y_test, cov_test, X_val=Non
         # Training & Validation
         if not args.test_only:
             print(f"Epoch {epoch}/{args.stop_epoch}")
+
             # Training
             net.train()
             for batch_idx, (data, target, cov) in enumerate(training_generator):
-                optimizer.zero_grad()
+                optimizer.zero_grad(set_to_none=True)
 
-                # if sequence length is standardized, <data> is a tuple of data, sequence lengths
+                data_dict = {}
                 if args.standardize_seq_length:
-                    x = data[0].to(device, non_blocking=True)
-                    x_lengths = torch.from_numpy(data[1])
-                    data = (x, x_lengths)
+                    data_dict['img'] = data[0].to(device, non_blocking=True)
+                    data_dict['length'] = torch.from_numpy(data[1])
                 else:
-                    data = data.to(device, non_blocking=True)
-
-                # if include covariate, pack in tuple
+                    data_dict['img'] = data.to(device, non_blocking=True)
                 if args.include_cov:
-                    data = (data, cov)
-                output = net(data)
+                    data_dict['cov'] = cov
 
+                output = net(data_dict)
                 target = torch.tensor(target, requires_grad=False).type(torch.LongTensor).to(device, non_blocking=True)
                 loss = F.cross_entropy(output, target)
                 res.loss_accum_train += loss.item() * len(target)
                 loss.backward()
                 optimizer.step()
-
                 output_softmax = softmax(output)
                 pred_prob = output_softmax[:, 1]
                 pred_label = torch.argmax(output_softmax, dim=1)
@@ -321,7 +323,7 @@ def train(args, X_train, y_train, cov_train, X_test, y_test, cov_test, X_val=Non
                 res.all_pred_prob_train.append(pred_prob)
                 res.all_pred_label_train.append(pred_label)
                 res.all_targets_train.append(target)
-                res.all_patient_ID_train.append(cov)
+                # res.all_patient_ID_train.append(cov)
 
             # Validation Set
             if X_val is not None:
@@ -329,21 +331,18 @@ def train(args, X_train, y_train, cov_train, X_test, y_test, cov_test, X_val=Non
                 with torch.no_grad():
                     for batch_idx, (data, target, cov) in enumerate(val_generator):
                         net.zero_grad()
-                        optimizer.zero_grad()
+                        optimizer.zero_grad(set_to_none=True)
 
-                        # if sequence length is standardized, <data> is a tuple of data, sequence lengths
+                        data_dict = {}
                         if args.standardize_seq_length:
-                            x = data[0].to(device, non_blocking=True)
-                            x_lengths = torch.from_numpy(data[1])
-                            data = (x, x_lengths)
+                            data_dict['img'] = data[0].to(device, non_blocking=True)
+                            data_dict['length'] = torch.from_numpy(data[1])
                         else:
-                            data = data.to(device, non_blocking=True)
-
-                        # if include covariate, pack in tuple
+                            data_dict['img'] = data.to(device, non_blocking=True)
                         if args.include_cov:
-                            data = (data, cov)
+                            data_dict['cov'] = cov
 
-                        output = net(data)
+                        output = net(data_dict)
                         target = torch.tensor(target).type(torch.LongTensor).to(device, non_blocking=True)
                         loss = F.cross_entropy(output, target)
                         res.loss_accum_val += loss.item() * len(target)
@@ -357,7 +356,7 @@ def train(args, X_train, y_train, cov_train, X_test, y_test, cov_test, X_val=Non
                         res.all_pred_prob_val.append(pred_prob)
                         res.all_pred_label_val.append(pred_label)
                         res.all_targets_val.append(target)
-                        res.all_patient_ID_val.append(cov)
+                        # res.all_patient_ID_val.append(cov)
 
             # Save results every epoch
             res.process_results(epoch,
@@ -382,21 +381,18 @@ def train(args, X_train, y_train, cov_train, X_test, y_test, cov_test, X_val=Non
         with torch.no_grad():
             for batch_idx, (data, target, cov) in enumerate(test_generator):
                 net.zero_grad()
-                optimizer.zero_grad()
+                optimizer.zero_grad(set_to_none=True)
 
-                # if sequence length is standardized, <data> is a tuple of data, sequence lengths
+                data_dict = {}
                 if args.standardize_seq_length:
-                    x = data[0].to(device, non_blocking=True)
-                    x_lengths = torch.from_numpy(data[1])
-                    data = (x, x_lengths)
+                    data_dict['img'] = data[0].to(device, non_blocking=True)
+                    data_dict['length'] = torch.from_numpy(data[1])
                 else:
-                    data = data.to(device, non_blocking=True)
-
-                # if include covariate, pack in tuple
+                    data_dict['img'] = data.to(device, non_blocking=True)
                 if args.include_cov:
-                    data = (data, cov)
+                    data_dict['cov'] = cov
 
-                output = net(data)
+                output = net(data_dict)
                 target = torch.tensor(target).type(torch.LongTensor).to(device)
                 loss = F.cross_entropy(output, target)
                 res.loss_accum_test += loss.item() * len(target)
@@ -501,28 +497,30 @@ def main():
         train_val_generator = [(X_train, y_train, cov_train, None, (), ())]
 
     i = 1
-    try:
-        # If folder is non-existent, create folder for storing results
-        if not os.path.isdir(curr_results_dir):
-            os.makedirs(curr_results_dir)
+    # try:
+    # If folder is non-existent, create folder for storing results
+    if not os.path.isdir(curr_results_dir):
+        os.makedirs(curr_results_dir)
 
-        # Train model
-        for train_val_fold in train_val_generator:  # only iterates once if not cross-fold validation
-            print(f"Fold {i}/{args.num_folds} Starting...")
-            X_train, y_train, cov_train, X_val, y_val, cov_val = train_val_fold
+    torch.backends.cudnn.benchmark = True
 
-            train(args, X_train, y_train, cov_train, X_test, y_test, cov_test, X_val, y_val, cov_val, fold=i)
-            i += 1
+    # Train model
+    for train_val_fold in train_val_generator:  # only iterates once if not cross-fold validation
+        print(f"Fold {i}/{args.num_folds} Starting...")
+        X_train, y_train, cov_train, X_val, y_val, cov_val = train_val_fold
 
-            if args.test_only:
-                break
+        train(args, X_train, y_train, cov_train, X_test, y_test, cov_test, X_val, y_val, cov_val, fold=i)
+        i += 1
 
-        if not args.test_only:
-            plot_loss(curr_results_dir)
-    except Exception as e:
-        # If exception occurs, print stack trace and remove results directory.
-        print(e)
-        shutil.rmtree(curr_results_dir)
+        if args.test_only:
+            break
+
+    if not args.test_only:
+        plot_loss(curr_results_dir)
+    # except Exception as e:
+    #     # If exception occurs, print stack trace and remove results directory.
+    #     print(e)
+    #     shutil.rmtree(curr_results_dir)
 
 
 if __name__ == '__main__':

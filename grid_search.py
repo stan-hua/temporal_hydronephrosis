@@ -176,12 +176,13 @@ if __name__ == "__main__":
     keep_best_weights = False
 
     timestamp = datetime.now().strftime("%Y-%m-%d")
+    timestamp = '2022-01-03'
     grid_search_dir = f"{project_dir}/results/{model_type}{'_' if (len(model_type) > 0) else ''}grid_search({timestamp})/"
 
     if not os.path.exists(grid_search_dir):
         os.mkdir(grid_search_dir)
 
-    lrs = [0.00001, 0.0001]  # 0.00001, 0.0001, 0.001
+    lrs = [0.00001]  # 0.00001, 0.0001, 0.001
     batch_sizes = [1, 64, 128]  # 6, 12
     momentums = [0.8, 0.95]  # 0.9, 0.95
     adams = [True, False]

@@ -3,6 +3,7 @@ Use this module to prepare data for model training. Can be used to prepare seque
 """
 from collections import defaultdict
 from datetime import datetime
+from functools import partial
 
 import numpy as np
 import torch
@@ -53,16 +54,18 @@ def create_data_loaders(X_train, y_train, cov_train, X_val, y_val, cov_val, X_te
         params["shuffle"] = False
         params["sampler"] = sampler
 
+    _pad_collate = partial(pad_collate, include_cov=args.include_cov)
+
     # Data Loaders
     training_generator = DataLoader(training_set,
-                                    collate_fn=pad_collate if args.standardize_seq_length else None,
+                                    collate_fn=_pad_collate if args.standardize_seq_length else None,
                                     **params)
     val_generator = DataLoader(val_set,
-                               collate_fn=pad_collate if args.standardize_seq_length else None,
+                               collate_fn=_pad_collate if args.standardize_seq_length else None,
                                **val_test_params) if (X_val is not None) else None
 
     test_generator = DataLoader(test_set,
-                                collate_fn=pad_collate if args.standardize_seq_length else None,
+                                collate_fn=_pad_collate if args.standardize_seq_length else None,
                                 **val_test_params)
 
     return training_generator, val_generator, test_generator
@@ -116,12 +119,13 @@ def make_validation_set(X_train, y_train, cov_train, cv=False, num_folds=5, trai
 
 
 # ==HELPER FUNCTIONS==:
-def pad_collate(batch):
+def pad_collate(batch, include_cov=False):
     """Pad batch to be of the longest sequence length.
 
     @returns tuple containing (padded X, y, cov and length of each sequence in batch)
     """
     x_t, y_t, cov_t = zip(*batch)
+
     x_lens = [len(x) for x in x_t]
     x_pad = pad_sequence(x_t, batch_first=True, padding_value=0)
 
@@ -132,18 +136,18 @@ def pad_collate(batch):
             y.extend([0] * abs(len(y) - max(x_lens)))
             assert len(y) == max(x_lens)
 
-    for cov in cov_t:
-        if len(cov["Side_L"]) != max(x_lens):  # pad with empty dictionary
-            cov["Side_L"].extend([0.] * abs(len(cov["Side_L"]) - max(x_lens)))
-            cov["Age_wks"].extend([0.] * abs(len(cov["Side_L"]) - max(x_lens)))
-            assert len(cov["Side_L"]) == max(x_lens)
-    # TODO: Fix this
-    # side_t = zip([np.array(cov["Side_L"]) for cov in cov_t])
-    # age_t = zip([np.array(cov["Age_wks"]) for cov in cov_t])
-    # covs = {"Age_wks": np.array([cov['Age_wks'][t] for cov in cov_t]),
-    #         "Side_L": np.array([cov['Side_L'][t] for cov in cov_t])}
-
-    return (x_pad, np.array(x_lens)), np.array(y_t), np.array(cov_t)
+    if include_cov:
+        for cov in cov_t:
+            if len(cov["Side_L"]) != max(x_lens):  # pad with empty dictionary
+                cov["Side_L"].extend([0.] * abs(len(cov["Side_L"]) - max(x_lens)))
+                cov["Age_wks"].extend([0.] * abs(len(cov["Side_L"]) - max(x_lens)))
+                assert len(cov["Side_L"]) == max(x_lens)
+        # side_t = zip([np.array(cov["Side_L"]) for cov in cov_t])
+        # age_t = zip([np.array(cov["Age_wks"]) for cov in cov_t])
+        # covs = {"Age_wks": np.array([cov['Age_wks'][t] for cov in cov_t]),
+        #         "Side_L": np.array([cov['Side_L'][t] for cov in cov_t])}
+        cov_t = np.array(cov_t)
+    return (x_pad, np.array(x_lens)), np.array(y_t), cov_t
 
 
 def split_data(data, split: int):

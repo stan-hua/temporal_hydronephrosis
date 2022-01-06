@@ -14,16 +14,15 @@ class SiamNetConvPooling(SiamNet):
         """Accepts sequence of dual view images. Extracts penultimate layer embeddings for each dual view, then performs
         max pooling over time.
         """
+        x_t = data['img']
+
         if self.cov_layers:
-            data, in_dict = data
-            x_t, x_lengths = data
-        else:
-            x_t, x_lengths = data
+            cov_dict = data['cov']
 
         t_embeddings = []
         x_t = x_t.transpose(0, 1)
         for t, x in enumerate(x_t):
-            if torch.mean(x) == 0:      # stop once hit zero padded image
+            if torch.mean(x) == 0:  # stop once hit zero padded image
                 break
 
             if self.num_inputs == 1:
@@ -48,8 +47,10 @@ class SiamNetConvPooling(SiamNet):
             x = x.view(B, -1)
 
             if self.cov_layers:
-                age = torch.from_numpy(np.array([cov_dict_['Age_wks'][t] for cov_dict_ in in_dict])).type(torch.FloatTensor).to(self.device, non_blocking=True).view(B, 1)
-                side = torch.from_numpy(np.array([cov_dict_['Side_L'][t] for cov_dict_ in in_dict])).type(torch.FloatTensor).to(self.device, non_blocking=True).view(B, 1)
+                age = torch.from_numpy(np.array([cov_dict_['Age_wks'][t] for cov_dict_ in cov_dict])).type(
+                    torch.FloatTensor).to(self.device, non_blocking=True).view(B, 1)
+                side = torch.from_numpy(np.array([cov_dict_['Side_L'][t] for cov_dict_ in cov_dict])).type(
+                    torch.FloatTensor).to(self.device, non_blocking=True).view(B, 1)
 
                 age = age.expand(-1, 512)  # (B, 512)
                 side = side.expand(-1, 512)
@@ -63,4 +64,3 @@ class SiamNetConvPooling(SiamNet):
         pred = self.classifier_new(x)
 
         return pred
-
