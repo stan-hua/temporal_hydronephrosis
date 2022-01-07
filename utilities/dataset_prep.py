@@ -1,17 +1,127 @@
 """
 Use this module to prepare data for model training. Can be used to prepare sequence of images.
 """
+import sys
 from collections import defaultdict
 from datetime import datetime
 from functools import partial
 
 import numpy as np
+import pytorch_lightning as pl
 import torch
 from sklearn.model_selection import StratifiedKFold
 from sklearn.utils import shuffle
 from torch.nn.utils.rnn import pad_sequence
 from torch.utils.data import DataLoader, WeightedRandomSampler
 
+
+class KidneyDataModule(pl.LightningDataModule):
+    def __init__(self, args, hyperparams=None):
+        super().__init__()
+        self.args = args
+        self.train_data, self.test_data = None, None
+        self.train_set, self.val_set, self.test_set = None, None, None
+        self.train_val_generator = None
+
+        self.fold = 0      # indexer for cross-fold validation
+        self.params = {'batch_size': hyperparams["batch_size"] if hyperparams is not None else 1,
+                       'shuffle': True,
+                       'num_workers': args.num_workers,
+                       'pin_memory': True,
+                       'persistent_workers': True}
+        self._pad_collate = partial(pad_collate, include_cov=args.include_cov)
+        self.SEED = 42
+
+    def setup(self, stage=None):
+        # Add to path
+        data_path = self.args.git_dir + "nephronetwork/0.Preprocess/preprocessed_images_20190617.pickle"
+        sys.path.insert(0, self.args.git_dir + '/nephronetwork/0.Preprocess/')
+        sys.path.insert(0, self.args.git_dir + '/nephronetwork/1.Models/siamese_network/')
+
+        from load_dataset_LE import load_dataset
+
+        # Load data
+        X_train, y_train, cov_train, X_test, y_test, cov_test = load_dataset(
+            views_to_get=self.args.view,
+            sort_by_date=True,
+            pickle_file=data_path,
+            contrast=self.args.contrast,
+            split=self.args.split,
+            get_cov=True,
+            bottom_cut=self.args.bottom_cut,
+            etiology=self.args.etiology,
+            crop=self.args.crop,
+            git_dir=self.args.git_dir
+        )
+
+        # Parse for covariates
+        if isinstance(cov_train, list) and isinstance(cov_test, list):
+            func_parse_cov = partial(parse_cov, age=True, side=True, sex=False)
+            cov_train = list(map(func_parse_cov, cov_train))
+            cov_test = list(map(func_parse_cov, cov_test))
+
+        # Remove samples without proper covariates
+        X_train, y_train, cov_train = remove_invalid_samples(X_train, y_train, cov_train)
+        X_test, y_test, cov_test = remove_invalid_samples(X_test, y_test, cov_test)
+
+        # Recreate data split
+        X_train, y_train, cov_train, X_test, y_test, cov_test = recreate_train_test_split(X_train, y_train, cov_train,
+                                                                                          X_test, y_test, cov_test)
+
+        # Prepare data into sequences
+        X_train, y_train, cov_train, X_test, y_test, cov_test = prepare_data_into_sequences(X_train, y_train, cov_train,
+                                                                                            X_test, y_test, cov_test,
+                                                                                            single_visit=self.args.single_visit,
+                                                                                            single_target=self.args.single_target)
+        remove_unnecessary_cov(cov_train)
+        remove_unnecessary_cov(cov_test)
+
+        # Split into train-validation sets
+        if self.args.include_validation:
+            train_val_generator = make_validation_set(X_train, y_train, cov_train,
+                                                      cv=self.args.cv, num_folds=self.args.num_folds)
+        else:
+            train_val_generator = [(X_train, y_train, cov_train, None, (), ())]
+
+        self.train_val_generator = train_val_generator
+        self.test_set = X_test, y_test, cov_test
+
+    def train_dataloader(self):
+        X_train, y_train, cov_train, _, _, _ = self.train_val_generator[self.fold]
+        X_train, y_train, cov_train = shuffle(X_train, y_train, cov_train, random_state=self.SEED)
+
+        training_set = KidneyDataset(X_train, y_train, cov_train)
+        training_generator = DataLoader(training_set,
+                                        collate_fn=self._pad_collate if self.args.standardize_seq_length else None,
+                                        **self.params)
+        return training_generator
+
+    def val_dataloader(self):
+        _, _, _, X_val, y_val, cov_val = self.train_val_generator[self.fold]
+        if X_val is None:
+            return None
+
+        val_set = KidneyDataset(X_val, y_val, cov_val) if (X_val is not None) else None
+        val_generator = DataLoader(val_set,
+                                   collate_fn=self._pad_collate if self.args.standardize_seq_length else None,
+                                   **self.params)
+        return val_generator
+
+    def test_dataloader(self):
+        test_generator = DataLoader(self.test_set,
+                                    collate_fn=self._pad_collate if self.args.standardize_seq_length else None,
+                                    **self.params)
+        return test_generator
+
+    # def transfer_batch_to_device(self, batch: Any, device: torch.device, dataloader_idx: int) -> Any:
+    #     data, target, cov = batch
+    #
+    #     if self.args.standardize_seq_length:
+    #         data = data[0].to(device, non_blocking=True), torch.from_numpy(data[1])
+    #     else:
+    #         data = data.to(device, non_blocking=True)
+    #
+    #     return data, target, cov
 
 # ==DATA LOADING==:
 class KidneyDataset(torch.utils.data.Dataset):
@@ -113,9 +223,9 @@ def make_validation_set(X_train, y_train, cov_train, cv=False, num_folds=5, trai
     else:
         skf = StratifiedKFold(n_splits=num_folds, shuffle=True, random_state=42)
 
-        return ((X_train[train_index], y_train[train_index], cov_train[train_index],
+        return [(X_train[train_index], y_train[train_index], cov_train[train_index],
                  X_train[val_index], y_train[val_index], cov_train[val_index]) for train_index, val_index in
-                skf.split(X_train, y_train))
+                skf.split(X_train, y_train)]
 
 
 # ==HELPER FUNCTIONS==:
@@ -133,7 +243,7 @@ def pad_collate(batch, include_cov=False):
     y_t = [list(y) if not isinstance(y, np.int32) else y for y in y_t]
     for y in y_t:
         if isinstance(y, list) and (len(y) != max(x_lens)):  # zero-padding
-            y.extend([0] * abs(len(y) - max(x_lens)))
+            y.extend([0.] * abs(len(y) - max(x_lens)))
             assert len(y) == max(x_lens)
 
     if include_cov:

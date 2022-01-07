@@ -12,7 +12,7 @@ from models.baseline import SiamNet
 # noinspection PyTypeChecker,PyUnboundLocalVariable
 class SiameseLSTM(SiamNet):
     def __init__(self, classes=2, num_inputs=2, output_dim=128, cov_layers=False, device=None, dropout_rate=0.5,
-                 batch_size=1, n_lstm_layers=1, hidden_dim=256, bidirectional=False, insert_where=2):
+                 batch_size=1, n_lstm_layers=1, hidden_dim=256, bidirectional=False, insert_where=0):
         super().__init__(classes=classes, num_inputs=num_inputs, output_dim=output_dim, cov_layers=cov_layers,
                          device=device, dropout_rate=dropout_rate)
 
@@ -26,6 +26,7 @@ class SiameseLSTM(SiamNet):
         # Change FC layers
         if self.insert_where == 0:              # immediately after convolutional layer
             input_size = 256 * 3 * 3 * 2
+            self.fc8.fc8 = nn.Linear(self.hidden_dim, self.output_dim)
         elif self.insert_where == 1:            # after first FC layer
             input_size = 1024
             self.fc7_new.fc7 = nn.Linear(256 * 3 * 3 * 2, self.output_dim)
@@ -187,6 +188,8 @@ class SiameseLSTM(SiamNet):
         x = torch.stack(t_embeddings)
         x = pack_padded_sequence(x, x_lengths, batch_first=True, enforce_sorted=False)
         lstm_out, (h_f, _) = self.lstm(x)
-        pred = self.classifier_new(h_f[-1])
+        # x = self.fc7_new(h_f[-1])
+        x = self.fc8(h_f[-1])
+        pred = self.classifier_new(x)
 
         return pred

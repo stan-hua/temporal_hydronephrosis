@@ -109,8 +109,8 @@ def modifyArgs(args):
     global model_name
 
     # Model hyperparameters
-    args.lr = 0.0001
-    args.batch_size = 13
+    args.lr = 0.00001
+    args.batch_size = 1
     args.adam = True
     args.momentum = 0.8
     args.weight_decay = 0.0005
@@ -123,7 +123,7 @@ def modifyArgs(args):
 
     # Choose model
     model_types = ["baseline", "conv_pool", "lstm", "tsm", "stgru"]
-    args.model = model_types[1]
+    args.model = model_types[2]
 
     if args.model == "baseline":
         model_name = "Siamese_Baseline"
@@ -179,10 +179,11 @@ def choose_model(args):
         model = SiamNetConvPooling(output_dim=256, device=device, cov_layers=args.include_cov)
         old_checkpoint = f"{results_dir}/Siamese_Baseline_2022-01-03_11-48-24/model-epoch_38-fold1.pth"
     elif args.model == "lstm":
-        model = SiameseLSTM(output_dim=256, batch_size=args.batch_size,
+        model = SiameseLSTM(output_dim=128, batch_size=args.batch_size,
                             bidirectional=True,
-                            hidden_dim=128,
+                            hidden_dim=512,
                             n_lstm_layers=1,
+                            insert_where=0,
                             device=device, cov_layers=args.include_cov)
     elif args.model == "tsm":
         # TODO: Implement this
@@ -393,7 +394,7 @@ def train(args, X_train, y_train, cov_train, X_test, y_test, cov_test, X_val=Non
                     data_dict['cov'] = cov
 
                 output = net(data_dict)
-                target = torch.tensor(target).type(torch.LongTensor).to(device)
+                target = torch.LongTensor(target).to(device)
                 loss = F.cross_entropy(output, target)
                 res.loss_accum_test += loss.item() * len(target)
                 res.counter_test += len(target)

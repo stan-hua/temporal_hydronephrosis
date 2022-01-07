@@ -4,13 +4,11 @@
     <option name="SCOPE_TYPE" value="3" />
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="2e439ead-1cec-4da4-9021-fd0df7818330" name="Changes" comment="Changes to model_training.py.&#10;Updated TSM">
-      <change beforePath="$PROJECT_DIR$/../nephronetwork/1.Models/siamese_network/train_resnet-vgg_lstm.py" beforeDir="false" afterPath="$PROJECT_DIR$/../nephronetwork/1.Models/siamese_network/train_resnet-vgg_lstm.py" afterDir="false" />
+    <list default="true" id="2e439ead-1cec-4da4-9021-fd0df7818330" name="Changes" comment="Data is now passed to model as dictionary.">
+      <change afterPath="$PROJECT_DIR$/model_training_pl.py" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/models/baseline_pl.py" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/grid_search.py" beforeDir="false" afterPath="$PROJECT_DIR$/grid_search.py" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/model_training.py" beforeDir="false" afterPath="$PROJECT_DIR$/model_training.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/models/baseline.py" beforeDir="false" afterPath="$PROJECT_DIR$/models/baseline.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/models/conv_pooling.py" beforeDir="false" afterPath="$PROJECT_DIR$/models/conv_pooling.py" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/models/lstm.py" beforeDir="false" afterPath="$PROJECT_DIR$/models/lstm.py" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/utilities/dataset_prep.py" beforeDir="false" afterPath="$PROJECT_DIR$/utilities/dataset_prep.py" afterDir="false" />
     </list>
@@ -51,7 +49,7 @@
     <option name="stateVersion" value="1" />
   </component>
   <component name="ProblemsViewState">
-    <option name="selectedIndex" value="2" />
+    <option name="selectedTabId" value="ProjectErrors" />
   </component>
   <component name="ProjectId" id="21fUAzTLr7EN6xURsuN7aRHA0yh" />
   <component name="ProjectLevelVcsManager" settingsEditedManually="true" />
@@ -68,17 +66,21 @@
     <property name="RunOnceActivity.OpenProjectViewOnStart" value="true" />
     <property name="RunOnceActivity.ShowReadmeOnStart" value="true" />
     <property name="TODO_SCOPE" value="All Places" />
-    <property name="last_opened_file_path" value="$USER_HOME$/AppData/Local/JetBrains/PyCharmCE2021.2/python_stubs/650211055" />
+    <property name="last_opened_file_path" value="$PROJECT_DIR$/models" />
     <property name="run.code.analysis.last.selected.profile" value="aDefault" />
     <property name="settings.editor.selected.configurable" value="com.jetbrains.python.configuration.PyActiveSdkModuleConfigurable" />
   </component>
   <component name="RecentsManager">
+    <key name="CopyFile.RECENT_KEYS">
+      <recent name="C:\Users\Stanley Hua\projects\temporal_hydronephrosis\models" />
+      <recent name="C:\Users\Stanley Hua\projects\temporal_hydronephrosis" />
+    </key>
     <key name="MoveFile.RECENT_KEYS">
       <recent name="C:\Users\Stanley Hua\projects\temporal_hydronephrosis\utilities" />
       <recent name="C:\Users\Stanley Hua\projects\temporal_hydronephrosis" />
     </key>
   </component>
-  <component name="RunManager" selected="Python.model_training">
+  <component name="RunManager" selected="Python.model_training_pl">
     <configuration default="true" type="PythonConfigurationType" factoryName="Python">
       <module name="temporal_hydronephrosis" />
       <option name="INTERPRETER_OPTIONS" value="" />
@@ -115,27 +117,6 @@
       <option name="SCRIPT_NAME" value="$PROJECT_DIR$/utilities/data_visualizer.py" />
       <option name="PARAMETERS" value="" />
       <option name="SHOW_COMMAND_LINE" value="false" />
-      <option name="EMULATE_TERMINAL" value="false" />
-      <option name="MODULE_MODE" value="false" />
-      <option name="REDIRECT_INPUT" value="false" />
-      <option name="INPUT_FILE" value="" />
-      <method v="2" />
-    </configuration>
-    <configuration name="dataset_prep" type="PythonConfigurationType" factoryName="Python" temporary="true" nameIsGenerated="true">
-      <module name="temporal_hydronephrosis" />
-      <option name="INTERPRETER_OPTIONS" value="" />
-      <option name="PARENT_ENVS" value="true" />
-      <envs>
-        <env name="PYTHONUNBUFFERED" value="1" />
-      </envs>
-      <option name="SDK_HOME" value="C:\Users\Stanley Hua\Anaconda3\envs\DL\python.exe" />
-      <option name="WORKING_DIRECTORY" value="$PROJECT_DIR$/.." />
-      <option name="IS_MODULE_SDK" value="true" />
-      <option name="ADD_CONTENT_ROOTS" value="true" />
-      <option name="ADD_SOURCE_ROOTS" value="true" />
-      <option name="SCRIPT_NAME" value="$PROJECT_DIR$/utilities/dataset_prep.py" />
-      <option name="PARAMETERS" value="" />
-      <option name="SHOW_COMMAND_LINE" value="true" />
       <option name="EMULATE_TERMINAL" value="false" />
       <option name="MODULE_MODE" value="false" />
       <option name="REDIRECT_INPUT" value="false" />
@@ -205,6 +186,24 @@
       <option name="INPUT_FILE" value="" />
       <method v="2" />
     </configuration>
+    <configuration name="model_training_pl" type="PythonConfigurationType" factoryName="Python" temporary="true" nameIsGenerated="true">
+      <module name="temporal_hydronephrosis" />
+      <option name="INTERPRETER_OPTIONS" value="" />
+      <option name="PARENT_ENVS" value="true" />
+      <option name="SDK_HOME" value="C:\Users\Stanley Hua\Anaconda3\envs\DL\python.exe" />
+      <option name="WORKING_DIRECTORY" value="$PROJECT_DIR$/.." />
+      <option name="IS_MODULE_SDK" value="true" />
+      <option name="ADD_CONTENT_ROOTS" value="true" />
+      <option name="ADD_SOURCE_ROOTS" value="true" />
+      <option name="SCRIPT_NAME" value="$PROJECT_DIR$/model_training_pl.py" />
+      <option name="PARAMETERS" value="" />
+      <option name="SHOW_COMMAND_LINE" value="true" />
+      <option name="EMULATE_TERMINAL" value="false" />
+      <option name="MODULE_MODE" value="false" />
+      <option name="REDIRECT_INPUT" value="false" />
+      <option name="INPUT_FILE" value="" />
+      <method v="2" />
+    </configuration>
     <configuration name="temporal_hydronephrosis" type="PythonConfigurationType" factoryName="Python" nameIsGenerated="true">
       <module name="temporal_hydronephrosis" />
       <option name="INTERPRETER_OPTIONS" value="" />
@@ -230,6 +229,9 @@
       <module name="nephronetwork" />
       <option name="INTERPRETER_OPTIONS" value="" />
       <option name="PARENT_ENVS" value="true" />
+      <envs>
+        <env name="PYTHONUNBUFFERED" value="1" />
+      </envs>
       <option name="SDK_HOME" value="C:\Users\Stanley Hua\Anaconda3\envs\DL\python.exe" />
       <option name="WORKING_DIRECTORY" value="$PROJECT_DIR$/.." />
       <option name="IS_MODULE_SDK" value="true" />
@@ -270,17 +272,17 @@
       <item itemvalue="Python.model_training" />
       <item itemvalue="Python.data_visualizer" />
       <item itemvalue="Python.grid_search" />
-      <item itemvalue="Python.dataset_prep" />
       <item itemvalue="Python.tsm_blocks" />
       <item itemvalue="Python.train_resnet-vgg_lstm" />
+      <item itemvalue="Python.model_training_pl" />
     </list>
     <recent_temporary>
       <list>
+        <item itemvalue="Python.model_training_pl" />
         <item itemvalue="Python.train_resnet-vgg_lstm" />
         <item itemvalue="Python.grid_search" />
         <item itemvalue="Python.data_visualizer" />
         <item itemvalue="Python.grid_search" />
-        <item itemvalue="Python.tsm_blocks" />
       </list>
     </recent_temporary>
   </component>
@@ -335,7 +337,14 @@
       <option name="project" value="LOCAL" />
       <updated>1641328577134</updated>
     </task>
-    <option name="localTasksCounter" value="7" />
+    <task id="LOCAL-00007" summary="Data is now passed to model as dictionary.">
+      <created>1641503347794</created>
+      <option name="number" value="00007" />
+      <option name="presentableId" value="LOCAL-00007" />
+      <option name="project" value="LOCAL" />
+      <updated>1641503347794</updated>
+    </task>
+    <option name="localTasksCounter" value="8" />
     <servers />
   </component>
   <component name="Vcs.Log.Tabs.Properties">
@@ -369,6 +378,7 @@
     <MESSAGE value="Added alternative locations to insert LSTM. &#10;&#10;Recreated train-test split to allow more positive patients with longer sequences in the test set.&#10;&#10;Added TSM code fromm original paper." />
     <MESSAGE value="# Updated parsing for covariate (age) in dataset_prep.py. &#10;# Added EDA in data_visualizer.py.&#10;# Changed exhaustive grid search to randomized grid search, and added feature to save used combinations." />
     <MESSAGE value="Changes to model_training.py.&#10;Updated TSM" />
-    <option name="LAST_COMMIT_MESSAGE" value="Changes to model_training.py.&#10;Updated TSM" />
+    <MESSAGE value="Data is now passed to model as dictionary." />
+    <option name="LAST_COMMIT_MESSAGE" value="Data is now passed to model as dictionary." />
   </component>
 </project>
