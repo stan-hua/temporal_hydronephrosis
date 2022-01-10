@@ -19,9 +19,9 @@ class KidneyDataModule(pl.LightningDataModule):
     def __init__(self, args, hyperparams=None):
         super().__init__()
         self.args = args
-        self.train_data, self.test_data = None, None
-        self.train_set, self.val_set, self.test_set = None, None, None
-        self.train_val_generator = None
+        self._train_data, self._test_data = None, None
+        self._train_set, self._val_set, self._test_set = None, None, None
+        self._train_val_generator = None
 
         self.fold = 0      # indexer for cross-fold validation
         self.params = {'batch_size': hyperparams["batch_size"] if hyperparams is not None else 1,
@@ -83,11 +83,11 @@ class KidneyDataModule(pl.LightningDataModule):
         else:
             train_val_generator = [(X_train, y_train, cov_train, None, (), ())]
 
-        self.train_val_generator = train_val_generator
-        self.test_set = X_test, y_test, cov_test
+        self._train_val_generator = train_val_generator
+        self._test_set = X_test, y_test, cov_test
 
     def train_dataloader(self):
-        X_train, y_train, cov_train, _, _, _ = self.train_val_generator[self.fold]
+        X_train, y_train, cov_train, _, _, _ = self._train_val_generator[self.fold]
         X_train, y_train, cov_train = shuffle(X_train, y_train, cov_train, random_state=self.SEED)
 
         training_set = KidneyDataset(X_train, y_train, cov_train)
@@ -97,7 +97,7 @@ class KidneyDataModule(pl.LightningDataModule):
         return training_generator
 
     def val_dataloader(self):
-        _, _, _, X_val, y_val, cov_val = self.train_val_generator[self.fold]
+        _, _, _, X_val, y_val, cov_val = self._train_val_generator[self.fold]
         if X_val is None:
             return None
 
@@ -108,20 +108,13 @@ class KidneyDataModule(pl.LightningDataModule):
         return val_generator
 
     def test_dataloader(self):
-        test_generator = DataLoader(self.test_set,
+        X_test, y_test, cov_test = self._test_set
+        test_set = KidneyDataset(X_test, y_test, cov_test)
+        test_generator = DataLoader(test_set,
                                     collate_fn=self._pad_collate if self.args.standardize_seq_length else None,
                                     **self.params)
         return test_generator
 
-    # def transfer_batch_to_device(self, batch: Any, device: torch.device, dataloader_idx: int) -> Any:
-    #     data, target, cov = batch
-    #
-    #     if self.args.standardize_seq_length:
-    #         data = data[0].to(device, non_blocking=True), torch.from_numpy(data[1])
-    #     else:
-    #         data = data.to(device, non_blocking=True)
-    #
-    #     return data, target, cov
 
 # ==DATA LOADING==:
 class KidneyDataset(torch.utils.data.Dataset):

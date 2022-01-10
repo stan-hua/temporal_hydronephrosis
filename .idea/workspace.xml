@@ -4,12 +4,18 @@
     <option name="SCOPE_TYPE" value="3" />
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="2e439ead-1cec-4da4-9021-fd0df7818330" name="Changes" comment="Data is now passed to model as dictionary.">
-      <change afterPath="$PROJECT_DIR$/model_training_pl.py" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/models/baseline_pl.py" afterDir="false" />
+    <list default="true" id="2e439ead-1cec-4da4-9021-fd0df7818330" name="Changes" comment="Converting existing code to PyTorch Lightning in (model_training_pl.py, dataset_prep.py, baseline_pl.py)">
+      <change afterPath="$PROJECT_DIR$/utilities/custom_logger.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/../nephronetwork/1.Models/siamese_network/plot_activations.py" beforeDir="false" afterPath="$PROJECT_DIR$/../nephronetwork/1.Models/siamese_network/plot_activations.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/../nephronetwork/4. GUI/GUI-test-v5.py" beforeDir="false" afterPath="$PROJECT_DIR$/../nephronetwork/4. GUI/GUI-test-v5.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/../nephronetwork/4. GUI/PHN_GUI_v1.py" beforeDir="false" afterPath="$PROJECT_DIR$/../nephronetwork/4. GUI/PHN_GUI_v1.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/../nephronetwork/4. GUI/PHN_dcm_GUI_v1.py" beforeDir="false" afterPath="$PROJECT_DIR$/../nephronetwork/4. GUI/PHN_dcm_GUI_v1.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/../nephronetwork/4.GUI/PHN_GUI_v2_folder_of_images.py" beforeDir="false" afterPath="$PROJECT_DIR$/../nephronetwork/4.GUI/PHN_GUI_v2_folder_of_images.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/../nephronetwork/single_run/gradcam_singlerun.py" beforeDir="false" afterPath="$PROJECT_DIR$/../nephronetwork/single_run/gradcam_singlerun.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/../nephronetwork/single_run/gradcam_singlerun_WithSideAge_20210604.py" beforeDir="false" afterPath="$PROJECT_DIR$/../nephronetwork/single_run/gradcam_singlerun_WithSideAge_20210604.py" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/model_training.py" beforeDir="false" afterPath="$PROJECT_DIR$/model_training.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/models/lstm.py" beforeDir="false" afterPath="$PROJECT_DIR$/models/lstm.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/model_training_pl.py" beforeDir="false" afterPath="$PROJECT_DIR$/model_training_pl.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/models/baseline_pl.py" beforeDir="false" afterPath="$PROJECT_DIR$/models/baseline_pl.py" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/utilities/dataset_prep.py" beforeDir="false" afterPath="$PROJECT_DIR$/utilities/dataset_prep.py" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
@@ -25,7 +31,7 @@
     </option>
   </component>
   <component name="Git.Merge.Settings">
-    <option name="BRANCH" value="add_cov" />
+    <option name="BRANCH" value="origin/master" />
   </component>
   <component name="Git.Settings">
     <option name="RECENT_BRANCH_BY_REPOSITORY">
@@ -49,7 +55,7 @@
     <option name="stateVersion" value="1" />
   </component>
   <component name="ProblemsViewState">
-    <option name="selectedTabId" value="ProjectErrors" />
+    <option name="selectedTabId" value="CurrentFile" />
   </component>
   <component name="ProjectId" id="21fUAzTLr7EN6xURsuN7aRHA0yh" />
   <component name="ProjectLevelVcsManager" settingsEditedManually="true" />
@@ -190,14 +196,17 @@
       <module name="temporal_hydronephrosis" />
       <option name="INTERPRETER_OPTIONS" value="" />
       <option name="PARENT_ENVS" value="true" />
-      <option name="SDK_HOME" value="C:\Users\Stanley Hua\Anaconda3\envs\DL\python.exe" />
+      <envs>
+        <env name="PYTHONUNBUFFERED" value="1" />
+      </envs>
+      <option name="SDK_HOME" value="" />
       <option name="WORKING_DIRECTORY" value="$PROJECT_DIR$/.." />
       <option name="IS_MODULE_SDK" value="true" />
       <option name="ADD_CONTENT_ROOTS" value="true" />
       <option name="ADD_SOURCE_ROOTS" value="true" />
       <option name="SCRIPT_NAME" value="$PROJECT_DIR$/model_training_pl.py" />
       <option name="PARAMETERS" value="" />
-      <option name="SHOW_COMMAND_LINE" value="true" />
+      <option name="SHOW_COMMAND_LINE" value="false" />
       <option name="EMULATE_TERMINAL" value="false" />
       <option name="MODULE_MODE" value="false" />
       <option name="REDIRECT_INPUT" value="false" />
@@ -344,7 +353,14 @@
       <option name="project" value="LOCAL" />
       <updated>1641503347794</updated>
     </task>
-    <option name="localTasksCounter" value="8" />
+    <task id="LOCAL-00008" summary="Converting existing code to PyTorch Lightning in (model_training_pl.py, dataset_prep.py, baseline_pl.py)">
+      <created>1641578355730</created>
+      <option name="number" value="00008" />
+      <option name="presentableId" value="LOCAL-00008" />
+      <option name="project" value="LOCAL" />
+      <updated>1641578355730</updated>
+    </task>
+    <option name="localTasksCounter" value="9" />
     <servers />
   </component>
   <component name="Vcs.Log.Tabs.Properties">
@@ -379,6 +395,7 @@
     <MESSAGE value="# Updated parsing for covariate (age) in dataset_prep.py. &#10;# Added EDA in data_visualizer.py.&#10;# Changed exhaustive grid search to randomized grid search, and added feature to save used combinations." />
     <MESSAGE value="Changes to model_training.py.&#10;Updated TSM" />
     <MESSAGE value="Data is now passed to model as dictionary." />
-    <option name="LAST_COMMIT_MESSAGE" value="Data is now passed to model as dictionary." />
+    <MESSAGE value="Converting existing code to PyTorch Lightning in (model_training_pl.py, dataset_prep.py, baseline_pl.py)" />
+    <option name="LAST_COMMIT_MESSAGE" value="Converting existing code to PyTorch Lightning in (model_training_pl.py, dataset_prep.py, baseline_pl.py)" />
   </component>
 </project>

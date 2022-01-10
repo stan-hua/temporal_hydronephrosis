@@ -1,18 +1,19 @@
 import argparse
 import json
 import os
-import shutil
 import warnings
 from datetime import datetime
 
 import numpy as np
 import torch
 from pytorch_lightning import Trainer
-from pytorch_lightning.loggers import CSVLogger, TensorBoardLogger
+from pytorch_lightning.loggers import TensorBoardLogger
+from pytorch_lightning.callbacks.model_checkpoint import ModelCheckpoint
 
 from models.baseline_pl import SiamNet
 from models.conv_pooling import SiamNetConvPooling
 from models.lstm import SiameseLSTM
+from utilities.custom_logger import FriendlyCSVLogger
 from utilities.dataset_prep import KidneyDataModule
 
 warnings.filterwarnings('ignore')
@@ -67,13 +68,6 @@ def parseArgs():
     parser.add_argument('--adam', action="store_true", help="Use Adam optimizer instead of SGD")
 
     # Unused arguments
-    # parser.add_argument('--vgg', action='store_true', help="Run VGG16 architecture, not using this flag runs ResNet")
-    # parser.add_argument('--vgg_bn', action='store_true', help="Run VGG16 batch norm architecture")
-    # parser.add_argument('--densenet', action='store_true', help="Run DenseNet")
-    # parser.add_argument('--resnet18', action='store_true',
-    #                     help="Run ResNet18 architecture, not using this flag runs ResNet16")
-    # parser.add_argument('--resnet50', action='store_true',
-    #                     help="Run ResNet50 architecture, not using this flag runs ResNet50")
     parser.add_argument('--pretrained', action="store_true",
                         help="Use pretrained model with cross validation if cv requested")
 
@@ -94,7 +88,7 @@ def modifyArgs(args):
     global model_name
 
     # Model hyperparameters
-    args.lr = 0.00001
+    args.lr = 0.001
     args.batch_size = 128
     args.adam = False
     args.momentum = 0.8
@@ -206,7 +200,7 @@ def update_paths(model_type):
 
 
 # Training
-def train(model, dm, fold=0):
+def train(model, dm, fold=0, version_name=None):
     global best_hyperparameters_folder
 
     dm.fold = fold
@@ -214,19 +208,24 @@ def train(model, dm, fold=0):
     val_loader = dm.val_dataloader()
     test_loader = dm.test_dataloader()
 
-    csv_logger = CSVLogger(f"{curr_results_dir}", name=f"fold{fold}", version=0)
-    tensorboard_logger = TensorBoardLogger(f"{curr_results_dir}", name=f"fold{fold}", version=0)
+    csv_logger = FriendlyCSVLogger(f"{curr_results_dir}", name=f'fold{fold}', version=version_name)
+    tensorboard_logger = TensorBoardLogger(f"{curr_results_dir}", name=f"fold{fold}", version=csv_logger.version)
+    checkpoint = ModelCheckpoint(dirpath=f"{curr_results_dir}fold{fold}/version_{csv_logger.version}/checkpoints")
 
-    trainer = Trainer(default_root_dir=curr_results_dir, gpus=1,
+    trainer = Trainer(default_root_dir=f"{curr_results_dir}fold{fold}/version_{csv_logger.version}",
+                      gpus=1, num_sanity_val_steps=1,
                       accumulate_grad_batches=None,
                       precision=16,
-                      gradient_clip_val=0.5,
-                      num_sanity_val_steps=1,
+                      gradient_clip_val=1,
                       max_epochs=100,
-                      logger=[csv_logger, tensorboard_logger])
+                      # stochastic_weight_avg=True,
+                      callbacks=[checkpoint],
+                      logger=[csv_logger, tensorboard_logger],
+                      # fast_dev_run=True
+                      )
 
     trainer.fit(model, train_dataloader=train_loader, val_dataloaders=val_loader)
-    trainer.test(test_dataloaders=test_loader)
+    # trainer.test(test_dataloaders=test_loader)
 
 
 # Main Method
@@ -269,22 +268,22 @@ def main():
     dm = KidneyDataModule(args, params)
     dm.prepare_data()
     dm.setup()
-    model = choose_model(args, hyperparams)
 
-    try:
-        # Train model
-        for fold in range(5 if args.cv else 1):  # only iterates once if not cross-fold validation
-            print(f"Fold {i}/{args.num_folds} Starting...")
+    # try:
+    # Train model
+    for fold in range(5 if args.cv else 1):  # only iterates once if not cross-fold validation
+        print(f"Fold {i}/{args.num_folds} Starting...")
 
-            train(model, dm, fold=fold)
+        model = choose_model(args, hyperparams)
+        train(model, dm, fold=fold)
 
         # if not args.test_only:
         #     plot_loss(curr_results_dir)
 
-    except Exception as e:
-        # If exception occurs, print stack trace and remove results directory.
-        print(e)
-        shutil.rmtree(curr_results_dir)
+    # except Exception as e:
+    #     # If exception occurs, print stack trace and remove results directory.
+    #     print(e)
+    #     shutil.rmtree(curr_results_dir)
 
 
 if __name__ == '__main__':

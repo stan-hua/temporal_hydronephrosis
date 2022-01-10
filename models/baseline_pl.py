@@ -25,66 +25,79 @@ class SiamNet(pl.LightningModule):
         # Save hyperparameters to checkpoint
         self.save_hyperparameters()
 
-        self.loss = torch.nn.NLLLoss(weight=torch.tensor((0.3, 0.7)))
-
         # CONVOLUTIONAL BLOCKS
-        self.conv = nn.Sequential()
-        self.conv.add_module('conv1_s1', nn.Conv2d(3, 96, kernel_size=11, stride=2, padding=0, bias=False))
-        self.conv.add_module('batch1_s1', nn.BatchNorm2d(96))
-        self.conv.add_module('relu1_s1', nn.ReLU(inplace=True))
-        self.conv.add_module('pool1_s1', nn.MaxPool2d(kernel_size=3, stride=2))
-        self.conv.add_module('lrn1_s1', LRN(local_size=5, alpha=0.0001, beta=0.75))
+        self.conv1 = nn.Sequential()
+        self.conv1.add_module('conv1_s1', nn.Conv2d(3, 96, kernel_size=11, stride=2, padding=0, bias=False))
+        self.conv1.add_module('batch1_s1', nn.BatchNorm2d(96))
+        self.conv1.add_module('relu1_s1', nn.ReLU(inplace=True))
+        self.conv1.add_module('pool1_s1', nn.MaxPool2d(kernel_size=3, stride=2))
+        self.conv1.add_module('lrn1_s1', LRN(local_size=5, alpha=0.0001, beta=0.75))
 
-        self.conv.add_module('conv2_s1', nn.Conv2d(96, 256, kernel_size=5, padding=2, groups=2, bias=False))
-        self.conv.add_module('batch2_s1', nn.BatchNorm2d(256))
-        self.conv.add_module('relu2_s1', nn.ReLU(inplace=True))
-        self.conv.add_module('pool2_s1', nn.MaxPool2d(kernel_size=3, stride=2))
-        self.conv.add_module('lrn2_s1', LRN(local_size=5, alpha=0.0001, beta=0.75))
+        self.conv2 = nn.Sequential()
+        self.conv2.add_module('conv2_s1', nn.Conv2d(96, 256, kernel_size=5, padding=2, groups=2, bias=False))
+        self.conv2.add_module('batch2_s1', nn.BatchNorm2d(256))
+        self.conv2.add_module('relu2_s1', nn.ReLU(inplace=True))
+        self.conv2.add_module('pool2_s1', nn.MaxPool2d(kernel_size=3, stride=2))
+        self.conv2.add_module('lrn2_s1', LRN(local_size=5, alpha=0.0001, beta=0.75))
 
-        self.conv.add_module('conv3_s1', nn.Conv2d(256, 384, kernel_size=3, padding=1, bias=False))
-        self.conv.add_module('batch3_s1', nn.BatchNorm2d(384))
-        self.conv.add_module('relu3_s1', nn.ReLU(inplace=True))
+        self.conv3 = nn.Sequential()
+        self.conv3.add_module('conv3_s1', nn.Conv2d(256, 384, kernel_size=3, padding=1, bias=False))
+        self.conv3.add_module('batch3_s1', nn.BatchNorm2d(384))
+        self.conv3.add_module('relu3_s1', nn.ReLU(inplace=True))
 
-        self.conv.add_module('conv4_s1', nn.Conv2d(384, 384, kernel_size=3, padding=1, groups=2, bias=False))
-        self.conv.add_module('batch4_s1', nn.BatchNorm2d(384))
-        self.conv.add_module('relu4_s1', nn.ReLU(inplace=True))
+        self.conv4 = nn.Sequential()
+        self.conv4.add_module('conv4_s1', nn.Conv2d(384, 384, kernel_size=3, padding=1, groups=2, bias=False))
+        self.conv4.add_module('batch4_s1', nn.BatchNorm2d(384))
+        self.conv4.add_module('relu4_s1', nn.ReLU(inplace=True))
 
-        self.conv.add_module('conv5_s1', nn.Conv2d(384, 256, kernel_size=3, padding=1, groups=2, bias=False))
-        self.conv.add_module('batch5_s1', nn.BatchNorm2d(256))
-        self.conv.add_module('relu5_s1', nn.ReLU(inplace=True))
-        self.conv.add_module('pool5_s1', nn.MaxPool2d(kernel_size=3, stride=2))
+        self.conv5 = nn.Sequential()
+        self.conv5.add_module('conv5_s1', nn.Conv2d(384, 256, kernel_size=3, padding=1, groups=2, bias=False))
+        self.conv5.add_module('batch5_s1', nn.BatchNorm2d(256))
+        self.conv5.add_module('relu5_s1', nn.ReLU(inplace=True))
+        self.conv5.add_module('pool5_s1', nn.MaxPool2d(kernel_size=3, stride=2))
 
-        self.fc6 = nn.Sequential()
-        self.fc6.add_module('fc6_s1', nn.Conv2d(256, 1024, kernel_size=2, stride=1, padding=1, bias=False))
-        self.fc6.add_module('batch6_s1', nn.BatchNorm2d(1024))
-        self.fc6.add_module('relu6_s1', nn.ReLU(inplace=True))
+        self.conv6 = nn.Sequential()
+        self.conv6.add_module('conv6_s1', nn.Conv2d(256, 1024, kernel_size=2, stride=1, padding=1, bias=False))
+        self.conv6.add_module('batch6_s1', nn.BatchNorm2d(1024))
+        self.conv6.add_module('relu6_s1', nn.ReLU(inplace=True))
 
-        self.fc6b = nn.Sequential()
-        self.fc6b.add_module('conv6b_s1', nn.Conv2d(1024, 256, kernel_size=3, stride=2, bias=False))
-        self.fc6b.add_module('batch6b_s1', nn.BatchNorm2d(256))
-        self.fc6b.add_module('relu6_s1', nn.ReLU(inplace=True))
-        self.fc6b.add_module('pool6b_s1', nn.MaxPool2d(kernel_size=3, stride=2))
+        self.conv7 = nn.Sequential()
+        self.conv7.add_module('conv7_s1', nn.Conv2d(1024, 256, kernel_size=3, stride=2, bias=False))
+        self.conv7.add_module('batch7_s1', nn.BatchNorm2d(256))
+        self.conv7.add_module('relu7_s1', nn.ReLU(inplace=True))
+        self.conv7.add_module('pool7_s1', nn.MaxPool2d(kernel_size=3, stride=2))
 
         # DENSE LAYERS
-        self.fc6c = nn.Sequential()
-        self.fc6c.add_module('fc7', nn.Linear(256 * 3 * 3, 512))
-        self.fc6c.add_module('relu7', nn.ReLU(inplace=True))
-        self.fc6c.add_module('drop7', nn.Dropout(p=dropout_rate))
-
-        # modified
-        self.fc7_new = nn.Sequential()
-        self.fc7_new.add_module('fc7', nn.Linear((self.num_inputs + (2 if self.cov_layers else 0)) * 512, 512))
-        self.fc7_new.add_module('relu7', nn.ReLU(inplace=True))
-        self.fc7_new.add_module('drop7', nn.Dropout(p=dropout_rate))
-
-        # modified
         self.fc8 = nn.Sequential()
-        self.fc8.add_module('fc8', nn.Linear(512, self.output_dim))
+        self.fc8.add_module('fc8', nn.Linear(256 * 3 * 3, 512))
         self.fc8.add_module('relu8', nn.ReLU(inplace=True))
         self.fc8.add_module('drop8', nn.Dropout(p=dropout_rate))
 
-        self.classifier_new = nn.Sequential()
-        self.classifier_new.add_module('fc9', nn.Linear(self.output_dim, classes))  # changed fc8 -> fc9
+        self.fc9 = nn.Sequential()
+        self.fc9.add_module('fc9', nn.Linear(self.num_inputs * 512, self.output_dim))
+        self.fc9.add_module('relu9', nn.ReLU(inplace=True))
+        self.fc9.add_module('drop9', nn.Dropout(p=dropout_rate))
+
+        # self.fc10 = nn.Sequential()
+        # self.fc10.add_module('fc10', nn.Linear(512, self.output_dim))
+        # self.fc10.add_module('relu10', nn.ReLU(inplace=True))
+        # self.fc10.add_module('drop10', nn.Dropout(p=dropout_rate))
+
+        self.fc10 = nn.Sequential()
+        self.fc10.add_module('fc10', nn.Linear(self.output_dim, classes))
+
+        if self.cov_layers:
+            self.fc10.add_module('relu10', nn.ReLU(inplace=True))
+
+            self.fc10b = nn.Sequential()
+            self.fc10b.add_module('fc10b', nn.Linear(classes + 2, self.output_dim))
+            self.fc10b.add_module('relu10b', nn.ReLU(inplace=True))
+
+            self.fc10c = nn.Sequential()
+            self.fc10c.add_module('fc10c', nn.Linear(classes + 126, classes))
+
+        self.loss = torch.nn.NLLLoss(weight=torch.tensor((0.12, 0.88)))      # weight=torch.tensor((0.15, 0.85))
+        # self.loss = torch.nn.CrossEntropyLoss()
 
     def load(self, checkpoint):
         model_dict = self.state_dict()
@@ -120,34 +133,34 @@ class SiamNet(pl.LightningModule):
         x = x.transpose(0, 1)
         x_list = []
         for i in range(self.num_inputs):
-            curr_x = torch.unsqueeze(x[i], 1)
-            curr_x = curr_x.expand(-1, 3, -1, -1)
-
-            z = self.conv(curr_x)
-            z = self.fc6(z)
-            z = self.fc6b(z)
+            z = torch.unsqueeze(x[i], 1)
+            z = z.expand(-1, 3, -1, -1)
+            z = self.conv1(z)
+            z = self.conv2(z)
+            z = self.conv3(z)
+            z = self.conv4(z)
+            z = self.conv5(z)
+            z = self.conv6(z)
+            z = self.conv7(z)
             z = z.view([B, 1, -1])
-            z = self.fc6c(z)
+            z = self.fc8(z)
             z = z.view([B, 1, -1])
             x_list.append(z)
 
         x = torch.cat(x_list, 1)
         x = x.view(B, -1)
+        x = self.fc9(x)
+        x = self.fc10(x)
 
         if self.cov_layers:
             age = cov_dict['Age_wks'].type(torch.FloatTensor).to(self.device, non_blocking=True).view(B, 1)
             side = cov_dict['Side_L'].type(torch.FloatTensor).to(self.device, non_blocking=True).view(B, 1)
 
-            age = age.expand(-1, 512)
-            side = side.expand(-1, 512)
             x = torch.cat((x, age, side), 1)
+            x = self.fc10b(x)
+            x = self.fc10c(x)
 
-        x = self.fc7_new(x)
-        x = self.fc8(x)
-        x = self.classifier_new(x)
-        x = torch.log_softmax(x, dim=1)
-
-        return x
+        return torch.log_softmax(x, dim=1)
 
     def training_step(self, train_batch, batch_idx):
         data, y_true, cov = train_batch
@@ -160,13 +173,15 @@ class SiamNet(pl.LightningModule):
 
         data_dict['cov'] = cov if self.args.include_cov else None
 
-        y_prob = self.forward(data_dict)
-        y_pred = torch.argmax(y_prob, dim=1)
+        out = self.forward(data_dict)
+        y_pred = torch.argmax(out, dim=1)
 
-        loss = self.loss(y_prob, y_true)
+        loss = self.loss(out, y_true)
         acc = torchmetrics.functional.accuracy(y_pred, y_true)
-        auroc = torchmetrics.functional.auroc(y_pred, y_true, num_classes=1, average="micro")
-        auprc = torchmetrics.functional.average_precision(y_pred, y_true, num_classes=1)
+        # auroc = torchmetrics.functional.auroc(y_prob, y_true, num_classes=2, average="macro")
+        # auprc = torchmetrics.functional.average_precision(y_prob, y_true, num_classes=2)
+        auroc = torchmetrics.functional.auroc(out[:, 1], y_true, num_classes=1, average="micro")
+        auprc = torchmetrics.functional.average_precision(out[:, 1], y_true, num_classes=1)
 
         self.log('train_loss', loss, on_step=False, on_epoch=True)
         self.log('train_acc', acc, on_step=False, on_epoch=True)
@@ -187,17 +202,19 @@ class SiamNet(pl.LightningModule):
 
         data_dict['cov'] = cov if self.args.include_cov else None
 
-        y_prob = self.forward(data_dict)
-        y_pred = torch.argmax(y_prob, dim=1)
+        out = self.forward(data_dict)
+        y_pred = torch.argmax(out, dim=1)
 
-        print(y_prob)
+        print(out)
         print(y_pred)
         print(y_true)
 
-        loss = F.nll_loss(y_prob, y_true)
+        loss = self.loss(out, y_true)
         acc = torchmetrics.functional.accuracy(y_pred, y_true)
-        auroc = torchmetrics.functional.auroc(y_pred, y_true, num_classes=1, average="micro")
-        auprc = torchmetrics.functional.average_precision(y_pred, y_true, num_classes=1)
+        # auroc = torchmetrics.functional.auroc(y_prob, y_true, num_classes=2, average="macro")
+        # auprc = torchmetrics.functional.average_precision(y_prob, y_true, num_classes=2)
+        auroc = torchmetrics.functional.auroc(out[:, 1], y_true, num_classes=1, average="micro")
+        auprc = torchmetrics.functional.average_precision(out[:, 1], y_true, num_classes=1)
 
         self.log('val_loss', loss, on_step=False, on_epoch=True)
         self.log('val_acc', acc, on_step=False, on_epoch=True)
@@ -216,13 +233,15 @@ class SiamNet(pl.LightningModule):
 
         data_dict['cov'] = cov if self.args.include_cov else None
 
-        y_prob = self.forward(data_dict)
-        y_pred = torch.argmax(y_prob, dim=1)
+        out = self.forward(data_dict)
+        y_pred = torch.argmax(out, dim=1)
 
-        loss = F.nll_loss(y_prob, y_true)
+        loss = self.loss(out, y_true)
         acc = torchmetrics.functional.accuracy(y_pred, y_true)
-        auroc = torchmetrics.functional.auroc(y_pred, y_true, num_classes=1, average="micro")
-        auprc = torchmetrics.functional.average_precision(y_pred, y_true, num_classes=1)
+        # auroc = torchmetrics.functional.auroc(y_prob, y_true, num_classes=2, average="macro")
+        # auprc = torchmetrics.functional.average_precision(y_prob, y_true, num_classes=2)
+        auroc = torchmetrics.functional.auroc(out[:, 1], y_true, num_classes=1, average="micro")
+        auprc = torchmetrics.functional.average_precision(out[:, 1], y_true, num_classes=1)
 
         self.log('test_loss', loss, on_step=False, on_epoch=True)
         self.log('test_acc', acc, on_step=False, on_epoch=True)
