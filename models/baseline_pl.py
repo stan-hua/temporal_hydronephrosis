@@ -25,9 +25,19 @@ class SiamNet(pl.LightningModule):
         # Save hyperparameters to checkpoint
         self.save_hyperparameters()
 
-        self.loss = torch.nn.NLLLoss(weight=torch.tensor((0.12, 0.88)))      # weight=torch.tensor((0.15, 0.85))
-        # self.loss = torch.nn.CrossEntropyLoss()
+        self.loss = torch.nn.NLLLoss(weight=torch.tensor((0.13, 0.87)))      # weight=torch.tensor((0.12, 0.88)
 
+        self.train_acc = torchmetrics.Accuracy()
+        self.train_auroc = torchmetrics.AUROC(num_classes=1, average="micro")
+        self.train_auprc = torchmetrics.AveragePrecision(num_classes=1)
+
+        self.val_acc = torchmetrics.Accuracy()
+        self.val_auroc = torchmetrics.AUROC(num_classes=1, average="micro")
+        self.val_auprc = torchmetrics.AveragePrecision(num_classes=1)
+
+        self.test_acc = torchmetrics.Accuracy()
+        self.test_auroc = torchmetrics.AUROC(num_classes=1, average="micro")
+        self.test_auprc = torchmetrics.AveragePrecision(num_classes=1)
 
         # CONVOLUTIONAL BLOCKS
         self.conv1 = nn.Sequential()
@@ -200,45 +210,31 @@ class SiamNet(pl.LightningModule):
 
     def training_step(self, train_batch, batch_idx):
         data_dict, y_true, id_ = train_batch
-
         out = self.forward(data_dict)
         y_pred = torch.argmax(out, dim=1)
 
         loss = self.loss(out, y_true)
-        acc = torchmetrics.functional.accuracy(y_pred, y_true)
-        # auroc = torchmetrics.functional.auroc(y_prob, y_true, num_classes=2, average="macro")
-        # auprc = torchmetrics.functional.average_precision(y_prob, y_true, num_classes=2)
-        auroc = torchmetrics.functional.auroc(out[:, 1], y_true, num_classes=1, average="micro")
-        auprc = torchmetrics.functional.average_precision(out[:, 1], y_true, num_classes=1)
-
-        self.log('train_loss', loss, on_step=False, on_epoch=True)
-        self.log('train_acc', acc, on_step=False, on_epoch=True)
-        self.log('train_auroc', auroc, on_step=False, on_epoch=True)
-        self.log('train_auprc', auprc, on_step=False, on_epoch=True, prog_bar=True)
+        self.train_acc.update(y_pred, y_true)
+        self.train_auroc.update(out[:, 1], y_true)
+        self.train_auprc.update(out[:, 1], y_true)
 
         return loss
 
     def validation_step(self, val_batch, batch_idx):
         data_dict, y_true, id_ = val_batch
-
         out = self.forward(data_dict)
         y_pred = torch.argmax(out, dim=1)
 
-        print(out)
-        print(y_pred)
-        print(y_true)
-
         loss = self.loss(out, y_true)
-        acc = torchmetrics.functional.accuracy(y_pred, y_true)
-        # auroc = torchmetrics.functional.auroc(y_prob, y_true, num_classes=2, average="macro")
-        # auprc = torchmetrics.functional.average_precision(y_prob, y_true, num_classes=2)
-        auroc = torchmetrics.functional.auroc(out[:, 1], y_true, num_classes=1, average="micro")
-        auprc = torchmetrics.functional.average_precision(out[:, 1], y_true, num_classes=1)
+        self.val_acc.update(y_pred, y_true)
+        self.val_auroc.update(out[:, 1], y_true)
+        self.val_auprc.update(out[:, 1], y_true)
 
-        self.log('val_loss', loss, on_step=False, on_epoch=True)
-        self.log('val_acc', acc, on_step=False, on_epoch=True)
-        self.log('val_auroc', auroc, on_step=False, on_epoch=True)
-        self.log('val_auprc', auprc, on_step=False, on_epoch=True, prog_bar=True)
+        # print(out)
+        # print(y_pred)
+        # print(y_true)
+
+        return loss
 
     def test_step(self, test_batch, batch_idx):
         data_dict, y_true, id_ = test_batch
@@ -246,23 +242,57 @@ class SiamNet(pl.LightningModule):
         y_pred = torch.argmax(out, dim=1)
 
         loss = self.loss(out, y_true)
-        acc = torchmetrics.functional.accuracy(y_pred, y_true)
-        auroc = torchmetrics.functional.auroc(out[:, 1], y_true, num_classes=1, average="micro")
-        auprc = torchmetrics.functional.average_precision(out[:, 1], y_true, num_classes=1)
+        self.test_acc.update(y_pred, y_true)
+        self.test_auroc.update(out[:, 1], y_true)
+        self.test_auprc.update(out[:, 1], y_true)
 
-        self.log('test_loss', loss, on_step=False, on_epoch=True)
-        self.log('test_acc', acc, on_step=False, on_epoch=True)
-        self.log('test_auroc', auroc, on_step=False, on_epoch=True)
-        self.log('test_auprc', auprc, on_step=False, on_epoch=True)
+        return loss
 
     def training_epoch_end(self, outputs):
-        pass
+        """Compute, log, and reset metrics for epoch."""
+        loss = torch.stack([d['loss'] for d in outputs]).mean()
+        acc = self.train_acc.compute()
+        auroc = self.train_auroc.compute()
+        auprc = self.train_auprc.compute()
 
-    def validation_epoch_end(self, outputs):
-        pass
+        self.log('train_loss', loss)
+        self.log('train_acc', acc)
+        self.log('train_auroc', auroc)
+        self.log('train_auprc', auprc, prog_bar=True)
 
-    def test_epoch_end(self, outputs):
-        pass
+        self.train_acc.reset()
+        self.train_auroc.reset()
+        self.train_auprc.reset()
+
+    def validation_epoch_end(self, validation_step_outputs):
+        loss = torch.tensor(validation_step_outputs).mean()
+        acc = self.val_acc.compute()
+        auroc = self.val_auroc.compute()
+        auprc = self.val_auprc.compute()
+
+        self.log('val_loss', loss)
+        self.log('val_acc', acc)
+        self.log('val_auroc', auroc)
+        self.log('val_auprc', auprc, prog_bar=True)
+
+        self.val_acc.reset()
+        self.val_auroc.reset()
+        self.val_auprc.reset()
+
+    def test_epoch_end(self, test_step_outputs):
+        loss = torch.tensor(test_step_outputs).mean()
+        acc = self.test_acc.compute()
+        auroc = self.test_auroc.compute()
+        auprc = self.test_auprc.compute()
+
+        self.log('test_loss', loss)
+        self.log('test_acc', acc)
+        self.log('test_auroc', auroc)
+        self.log('test_auprc', auprc, prog_bar=True)
+
+        self.test_acc.reset()
+        self.test_auroc.reset()
+        self.test_auprc.reset()
 
 
 class LRN(nn.Module):

@@ -73,6 +73,7 @@ def parseArgs():
     parser.add_argument("--output_dim", default=256, type=int, help="output dim for last linear layer")
     parser.add_argument("--include_cov", action="store_true",
                         help="Include covariates (age at ultrasound and kidney side (R/L)) in model.")
+    parser.add_argument("--accum_grad_batches", default=None, help="Number of batches to accumulate gradient.")
 
     parser.add_argument("--num_workers", default=1, type=int, help="Number of CPU workers")
     parser.add_argument("--split", default=0.7, type=float, help="proportion of dataset to use as training")
@@ -99,20 +100,20 @@ def modifyArgs(args):
 
     # Model hyperparameters
     args.lr = 0.0001
-    args.batch_size = 1
+    args.batch_size = 128
     args.adam = False
     args.momentum = 0.8
     args.weight_decay = 0.0005
 
     args.early_stopping_patience = 100
     args.save_frequency = 1000  # Save weights every x epochs
-    args.include_cov = False
+    args.include_cov = True
     args.load_hyperparameters = False
     args.pretrained = False
 
     # Choose model
     model_types = ["baseline", "conv_pool", "lstm", "tsm", "stgru"]
-    args.model = model_types[1]
+    args.model = model_types[0]
 
     if args.model == "baseline":
         model_name = "Siamese_Baseline"
@@ -128,7 +129,8 @@ def modifyArgs(args):
         args.standardize_seq_length, args.single_visit = False, True
     else:  # for multiple-visit models
         args.standardize_seq_length, args.single_visit = True, False
-        assert args.batch_size == 1
+        args.accum_grad_batches = args.batch_size
+        args.batch_size = 1
 
     args.balance_classes = False
     args.num_workers = 4
@@ -212,7 +214,7 @@ def update_paths(model_type):
 
 
 # Training
-def train(model, dm, fold=0, version_name=None):
+def train(model, dm, args, fold=0, version_name=None):
     global best_hyperparameters_folder
 
     dm.fold = fold
@@ -226,7 +228,7 @@ def train(model, dm, fold=0, version_name=None):
 
     trainer = Trainer(default_root_dir=f"{curr_results_dir}fold{fold}/version_{csv_logger.version}",
                       gpus=1, num_sanity_val_steps=1,
-                      # accumulate_grad_batches=None,
+                      accumulate_grad_batches=args.accum_grad_batches,
                       precision=16,
                       gradient_clip_val=1,
                       max_epochs=100,
@@ -287,7 +289,7 @@ def main():
         print(f"Fold {i}/{args.num_folds} Starting...")
 
         model = choose_model(args, hyperparams)
-        train(model, dm, fold=fold)
+        train(model, dm, args, fold=fold)
 
         # if not args.test_only:
         #     plot_loss(curr_results_dir)
