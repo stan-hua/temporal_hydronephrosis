@@ -7,10 +7,7 @@ from pytorch_lightning.utilities.distributed import rank_zero_only
 
 class FriendlyCSVLogger(CSVLogger):
     @rank_zero_only
-    def save(self) -> None:
-        super().save()
-        self.experiment.save()
-
+    def finalize(self, status=None) -> None:
         metrics_path = os.path.join(self.experiment.metrics_file_path)
 
         def _collapse_epoch(df_):

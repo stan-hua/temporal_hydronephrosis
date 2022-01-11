@@ -4,18 +4,13 @@
     <option name="SCOPE_TYPE" value="3" />
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="2e439ead-1cec-4da4-9021-fd0df7818330" name="Changes" comment="Converting existing code to PyTorch Lightning in (model_training_pl.py, dataset_prep.py, baseline_pl.py)">
-      <change afterPath="$PROJECT_DIR$/utilities/custom_logger.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/../nephronetwork/1.Models/siamese_network/plot_activations.py" beforeDir="false" afterPath="$PROJECT_DIR$/../nephronetwork/1.Models/siamese_network/plot_activations.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/../nephronetwork/4. GUI/GUI-test-v5.py" beforeDir="false" afterPath="$PROJECT_DIR$/../nephronetwork/4. GUI/GUI-test-v5.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/../nephronetwork/4. GUI/PHN_GUI_v1.py" beforeDir="false" afterPath="$PROJECT_DIR$/../nephronetwork/4. GUI/PHN_GUI_v1.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/../nephronetwork/4. GUI/PHN_dcm_GUI_v1.py" beforeDir="false" afterPath="$PROJECT_DIR$/../nephronetwork/4. GUI/PHN_dcm_GUI_v1.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/../nephronetwork/4.GUI/PHN_GUI_v2_folder_of_images.py" beforeDir="false" afterPath="$PROJECT_DIR$/../nephronetwork/4.GUI/PHN_GUI_v2_folder_of_images.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/../nephronetwork/single_run/gradcam_singlerun.py" beforeDir="false" afterPath="$PROJECT_DIR$/../nephronetwork/single_run/gradcam_singlerun.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/../nephronetwork/single_run/gradcam_singlerun_WithSideAge_20210604.py" beforeDir="false" afterPath="$PROJECT_DIR$/../nephronetwork/single_run/gradcam_singlerun_WithSideAge_20210604.py" afterDir="false" />
+    <list default="true" id="2e439ead-1cec-4da4-9021-fd0df7818330" name="Changes" comment="Add custom logger to PyTorch lightning training.">
+      <change beforePath="$PROJECT_DIR$/../nephronetwork/1.Models/siamese_network/train_siamese_network_CV_v3_STStanUITest_diffsource.py" beforeDir="false" afterPath="$PROJECT_DIR$/../nephronetwork/1.Models/siamese_network/train_siamese_network_CV_v3_STStanUITest_diffsource.py" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/model_training_pl.py" beforeDir="false" afterPath="$PROJECT_DIR$/model_training_pl.py" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/models/baseline_pl.py" beforeDir="false" afterPath="$PROJECT_DIR$/models/baseline_pl.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/models/conv_pooling.py" beforeDir="false" afterPath="$PROJECT_DIR$/models/conv_pooling.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/utilities/custom_logger.py" beforeDir="false" afterPath="$PROJECT_DIR$/utilities/custom_logger.py" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/utilities/dataset_prep.py" beforeDir="false" afterPath="$PROJECT_DIR$/utilities/dataset_prep.py" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
@@ -108,42 +103,36 @@
       <option name="INPUT_FILE" value="" />
       <method v="2" />
     </configuration>
-    <configuration name="data_visualizer" type="PythonConfigurationType" factoryName="Python" temporary="true" nameIsGenerated="true">
+    <configuration name="baseline_pl" type="PythonConfigurationType" factoryName="Python" temporary="true" nameIsGenerated="true">
       <module name="temporal_hydronephrosis" />
       <option name="INTERPRETER_OPTIONS" value="" />
       <option name="PARENT_ENVS" value="true" />
-      <envs>
-        <env name="PYTHONUNBUFFERED" value="1" />
-      </envs>
-      <option name="SDK_HOME" value="" />
+      <option name="SDK_HOME" value="C:\Users\Stanley Hua\Anaconda3\envs\DL\python.exe" />
       <option name="WORKING_DIRECTORY" value="$PROJECT_DIR$/.." />
       <option name="IS_MODULE_SDK" value="true" />
       <option name="ADD_CONTENT_ROOTS" value="true" />
       <option name="ADD_SOURCE_ROOTS" value="true" />
-      <option name="SCRIPT_NAME" value="$PROJECT_DIR$/utilities/data_visualizer.py" />
+      <option name="SCRIPT_NAME" value="$PROJECT_DIR$/models/baseline_pl.py" />
       <option name="PARAMETERS" value="" />
-      <option name="SHOW_COMMAND_LINE" value="false" />
+      <option name="SHOW_COMMAND_LINE" value="true" />
       <option name="EMULATE_TERMINAL" value="false" />
       <option name="MODULE_MODE" value="false" />
       <option name="REDIRECT_INPUT" value="false" />
       <option name="INPUT_FILE" value="" />
       <method v="2" />
     </configuration>
-    <configuration name="grid_search" type="PythonConfigurationType" factoryName="Python" temporary="true" nameIsGenerated="true">
+    <configuration name="dataset_prep" type="PythonConfigurationType" factoryName="Python" temporary="true" nameIsGenerated="true">
       <module name="temporal_hydronephrosis" />
       <option name="INTERPRETER_OPTIONS" value="" />
       <option name="PARENT_ENVS" value="true" />
-      <envs>
-        <env name="PYTHONUNBUFFERED" value="1" />
-      </envs>
-      <option name="SDK_HOME" value="" />
+      <option name="SDK_HOME" value="C:\Users\Stanley Hua\Anaconda3\envs\DL\python.exe" />
       <option name="WORKING_DIRECTORY" value="$PROJECT_DIR$/.." />
       <option name="IS_MODULE_SDK" value="true" />
       <option name="ADD_CONTENT_ROOTS" value="true" />
       <option name="ADD_SOURCE_ROOTS" value="true" />
-      <option name="SCRIPT_NAME" value="$PROJECT_DIR$/grid_search.py" />
+      <option name="SCRIPT_NAME" value="$PROJECT_DIR$/utilities/dataset_prep.py" />
       <option name="PARAMETERS" value="" />
-      <option name="SHOW_COMMAND_LINE" value="false" />
+      <option name="SHOW_COMMAND_LINE" value="true" />
       <option name="EMULATE_TERMINAL" value="false" />
       <option name="MODULE_MODE" value="false" />
       <option name="REDIRECT_INPUT" value="false" />
@@ -196,9 +185,6 @@
       <module name="temporal_hydronephrosis" />
       <option name="INTERPRETER_OPTIONS" value="" />
       <option name="PARENT_ENVS" value="true" />
-      <envs>
-        <env name="PYTHONUNBUFFERED" value="1" />
-      </envs>
       <option name="SDK_HOME" value="" />
       <option name="WORKING_DIRECTORY" value="$PROJECT_DIR$/.." />
       <option name="IS_MODULE_SDK" value="true" />
@@ -255,19 +241,16 @@
       <option name="INPUT_FILE" value="" />
       <method v="2" />
     </configuration>
-    <configuration name="tsm_blocks" type="PythonConfigurationType" factoryName="Python" temporary="true" nameIsGenerated="true">
-      <module name="temporal_hydronephrosis" />
+    <configuration name="train_siamese_network_CV_v3_STStanUITest_diffsource" type="PythonConfigurationType" factoryName="Python" temporary="true" nameIsGenerated="true">
+      <module name="nephronetwork" />
       <option name="INTERPRETER_OPTIONS" value="" />
       <option name="PARENT_ENVS" value="true" />
-      <envs>
-        <env name="PYTHONUNBUFFERED" value="1" />
-      </envs>
       <option name="SDK_HOME" value="C:\Users\Stanley Hua\Anaconda3\envs\DL\python.exe" />
       <option name="WORKING_DIRECTORY" value="$PROJECT_DIR$/.." />
       <option name="IS_MODULE_SDK" value="true" />
       <option name="ADD_CONTENT_ROOTS" value="true" />
       <option name="ADD_SOURCE_ROOTS" value="true" />
-      <option name="SCRIPT_NAME" value="C:\Users\Stanley Hua\projects\temporal_hydronephrosis\models\tsm_blocks.py" />
+      <option name="SCRIPT_NAME" value="$PROJECT_DIR$/../nephronetwork/1.Models/siamese_network/train_siamese_network_CV_v3_STStanUITest_diffsource.py" />
       <option name="PARAMETERS" value="" />
       <option name="SHOW_COMMAND_LINE" value="true" />
       <option name="EMULATE_TERMINAL" value="false" />
@@ -279,19 +262,19 @@
     <list>
       <item itemvalue="Python.temporal_hydronephrosis" />
       <item itemvalue="Python.model_training" />
-      <item itemvalue="Python.data_visualizer" />
-      <item itemvalue="Python.grid_search" />
-      <item itemvalue="Python.tsm_blocks" />
       <item itemvalue="Python.train_resnet-vgg_lstm" />
       <item itemvalue="Python.model_training_pl" />
+      <item itemvalue="Python.train_siamese_network_CV_v3_STStanUITest_diffsource" />
+      <item itemvalue="Python.baseline_pl" />
+      <item itemvalue="Python.dataset_prep" />
     </list>
     <recent_temporary>
       <list>
         <item itemvalue="Python.model_training_pl" />
+        <item itemvalue="Python.dataset_prep" />
+        <item itemvalue="Python.baseline_pl" />
+        <item itemvalue="Python.train_siamese_network_CV_v3_STStanUITest_diffsource" />
         <item itemvalue="Python.train_resnet-vgg_lstm" />
-        <item itemvalue="Python.grid_search" />
-        <item itemvalue="Python.data_visualizer" />
-        <item itemvalue="Python.grid_search" />
       </list>
     </recent_temporary>
   </component>
@@ -360,7 +343,14 @@
       <option name="project" value="LOCAL" />
       <updated>1641578355730</updated>
     </task>
-    <option name="localTasksCounter" value="9" />
+    <task id="LOCAL-00009" summary="Add custom logger to PyTorch lightning training.">
+      <created>1641773445175</created>
+      <option name="number" value="00009" />
+      <option name="presentableId" value="LOCAL-00009" />
+      <option name="project" value="LOCAL" />
+      <updated>1641773445175</updated>
+    </task>
+    <option name="localTasksCounter" value="10" />
     <servers />
   </component>
   <component name="Vcs.Log.Tabs.Properties">
@@ -396,6 +386,7 @@
     <MESSAGE value="Changes to model_training.py.&#10;Updated TSM" />
     <MESSAGE value="Data is now passed to model as dictionary." />
     <MESSAGE value="Converting existing code to PyTorch Lightning in (model_training_pl.py, dataset_prep.py, baseline_pl.py)" />
-    <option name="LAST_COMMIT_MESSAGE" value="Converting existing code to PyTorch Lightning in (model_training_pl.py, dataset_prep.py, baseline_pl.py)" />
+    <MESSAGE value="Add custom logger to PyTorch lightning training." />
+    <option name="LAST_COMMIT_MESSAGE" value="Add custom logger to PyTorch lightning training." />
   </component>
 </project>

@@ -1,405 +1,509 @@
 """
 Use this module to prepare data for model training. Can be used to prepare sequence of images.
 """
-import sys
-from collections import defaultdict
-from datetime import datetime
-from functools import partial
 
+import json
+import math
+import os
+import random
+from collections import defaultdict
+
+import cv2
 import numpy as np
 import pytorch_lightning as pl
 import torch
+from PIL import Image
+from skimage import img_as_float, transform, exposure
+from skimage.transform import resize
 from sklearn.model_selection import StratifiedKFold
 from sklearn.utils import shuffle
-from torch.nn.utils.rnn import pad_sequence
-from torch.utils.data import DataLoader, WeightedRandomSampler
+from torch.utils.data import DataLoader
 
 
 class KidneyDataModule(pl.LightningDataModule):
-    def __init__(self, args, hyperparams=None):
+    def __init__(self, args, dataloader_params=None):
         super().__init__()
         self.args = args
-        self._train_data, self._test_data = None, None
-        self._train_set, self._val_set, self._test_set = None, None, None
-        self._train_val_generator = None
-
-        self.fold = 0      # indexer for cross-fold validation
-        self.params = {'batch_size': hyperparams["batch_size"] if hyperparams is not None else 1,
-                       'shuffle': True,
-                       'num_workers': args.num_workers,
-                       'pin_memory': True,
-                       'persistent_workers': True}
-        self._pad_collate = partial(pad_collate, include_cov=args.include_cov)
+        self.dataloader_params = dataloader_params
         self.SEED = 42
 
-    def setup(self, stage=None):
-        # Add to path
-        data_path = self.args.git_dir + "nephronetwork/0.Preprocess/preprocessed_images_20190617.pickle"
-        sys.path.insert(0, self.args.git_dir + '/nephronetwork/0.Preprocess/')
-        sys.path.insert(0, self.args.git_dir + '/nephronetwork/1.Models/siamese_network/')
+        self.fold = 0  # indexer for cross-fold validation
+        self.train_img_dict, self.train_label_dict, self.train_cov_dict, self.train_study_ids = None, None, None, None
+        self._train_val_idx_generator = None
 
-        from load_dataset_LE import load_dataset
+        self.test_set, self.st_test_set, self.stan_test_set, self.ui_test_set = None, None, None, None
 
-        # Load data
-        X_train, y_train, cov_train, X_test, y_test, cov_test = load_dataset(
-            views_to_get=self.args.view,
-            sort_by_date=True,
-            pickle_file=data_path,
-            contrast=self.args.contrast,
-            split=self.args.split,
-            get_cov=True,
-            bottom_cut=self.args.bottom_cut,
-            etiology=self.args.etiology,
-            crop=self.args.crop,
-            git_dir=self.args.git_dir
-        )
+    def setup(self, stage='fit'):
+        args = self.args
+        if stage == 'fit':
+            train_dict, test_dict = load_dataset(args.json_infile, test_prop=0.2, ordered_split=args.ordered_split,
+                                                 train_only=args.train_only,
+                                                 data_dir=args.data_dir)
 
-        # Parse for covariates
-        if isinstance(cov_train, list) and isinstance(cov_test, list):
-            func_parse_cov = partial(parse_cov, age=True, side=True, sex=False)
-            cov_train = list(map(func_parse_cov, cov_train))
-            cov_test = list(map(func_parse_cov, cov_test))
+            train_img_dict, train_label_dict, train_cov_dict, train_study_ids = get_data_dicts(train_dict,
+                                                                                               data_dir=args.data_dir,
+                                                                                               seq=not args.single_visit)
+            # Prepare data into sequences
 
-        # Remove samples without proper covariates
-        X_train, y_train, cov_train = remove_invalid_samples(X_train, y_train, cov_train)
-        X_test, y_test, cov_test = remove_invalid_samples(X_test, y_test, cov_test)
+            # Split into train-validation sets
+            if args.include_validation:
+                train_labels = list(train_label_dict.values())
+                train_val_ids_generator = make_validation_set(train_study_ids, train_labels,
+                                                              cv=args.cv, num_folds=args.num_folds)
+            else:
+                train_val_ids_generator = [(train_study_ids, [])]
 
-        # Recreate data split
-        X_train, y_train, cov_train, X_test, y_test, cov_test = recreate_train_test_split(X_train, y_train, cov_train,
-                                                                                          X_test, y_test, cov_test)
+            self._train_val_idx_generator = train_val_ids_generator
 
-        # Prepare data into sequences
-        X_train, y_train, cov_train, X_test, y_test, cov_test = prepare_data_into_sequences(X_train, y_train, cov_train,
-                                                                                            X_test, y_test, cov_test,
-                                                                                            single_visit=self.args.single_visit,
-                                                                                            single_target=self.args.single_target)
-        remove_unnecessary_cov(cov_train)
-        remove_unnecessary_cov(cov_test)
+            self.train_img_dict = train_img_dict
+            self.train_label_dict = train_label_dict
+            self.train_cov_dict = train_cov_dict
+            self.train_study_ids = np.array(list(self.train_img_dict.keys()))
 
-        # Split into train-validation sets
-        if self.args.include_validation:
-            train_val_generator = make_validation_set(X_train, y_train, cov_train,
-                                                      cv=self.args.cv, num_folds=self.args.num_folds)
-        else:
-            train_val_generator = [(X_train, y_train, cov_train, None, (), ())]
+            # Test set
+            if not args.train_only:
+                test_set = get_data_dicts(test_dict, data_dir=args.data_dir, seq=not args.single_visit,
+                                          last_visit_only=args.single_visit)
+                self.test_set = KidneyDataset(data_dicts=test_set, include_cov=self.args.include_cov)
 
-        self._train_val_generator = train_val_generator
-        self._test_set = X_test, y_test, cov_test
+        if stage == 'test_heldout':
+            # Silent Trial
+            st_test_dict = load_test_dataset(args.json_st_test, data_dir=args.data_dir)
+            st_test_set = get_data_dicts(st_test_dict, data_dir=args.data_dir, silent_trial=True)
+            self.st_test_set = KidneyDataset(data_dicts=st_test_set, include_cov=args.include_cov)
+
+            # Stanford
+            stan_test_dict = load_test_dataset(args.json_stan_test, data_dir=args.data_dir)
+            stan_test_set = get_data_dicts(stan_test_dict, data_dir=args.data_dir)
+            self.stan_test_set = KidneyDataset(data_dicts=stan_test_set, include_cov=args.include_cov)
+
+            # UIowa
+            ui_test_dict = load_test_dataset(args.json_ui_test, data_dir=args.data_dir)
+            ui_test_set = get_data_dicts(ui_test_dict, data_dir=args.data_dir)
+            self.ui_test_set = KidneyDataset(data_dicts=ui_test_set, include_cov=args.include_cov)
 
     def train_dataloader(self):
-        X_train, y_train, cov_train, _, _, _ = self._train_val_generator[self.fold]
-        X_train, y_train, cov_train = shuffle(X_train, y_train, cov_train, random_state=self.SEED)
+        train_idx, _ = self._train_val_idx_generator[self.fold]
+        train_ids = self.train_study_ids[train_idx]
 
-        training_set = KidneyDataset(X_train, y_train, cov_train)
-        training_generator = DataLoader(training_set,
-                                        collate_fn=self._pad_collate if self.args.standardize_seq_length else None,
-                                        **self.params)
+        train_imgs_dict = {train_id: self.train_img_dict[train_id] for train_id in train_ids}
+        train_labels_dict = {train_id: self.train_label_dict[train_id] for train_id in train_ids}
+        train_cov_dict = {train_id: self.train_cov_dict[train_id] for train_id in train_ids}
+
+        train_dicts = train_imgs_dict, train_labels_dict, train_cov_dict, train_ids
+        training_set = KidneyDataset(train_dicts, include_cov=self.args.include_cov)
+        training_generator = DataLoader(training_set, **self.dataloader_params)
         return training_generator
 
     def val_dataloader(self):
-        _, _, _, X_val, y_val, cov_val = self._train_val_generator[self.fold]
-        if X_val is None:
+        _, val_ids = self._train_val_idx_generator[self.fold]
+        val_ids = self.train_study_ids[val_ids]
+
+        if len(val_ids) == 0:
             return None
 
-        val_set = KidneyDataset(X_val, y_val, cov_val) if (X_val is not None) else None
-        val_generator = DataLoader(val_set,
-                                   collate_fn=self._pad_collate if self.args.standardize_seq_length else None,
-                                   **self.params)
+        val_imgs_dict = {val_id: self.train_img_dict[val_id] for val_id in val_ids}
+        val_labels_dict = {val_id: self.train_label_dict[val_id] for val_id in val_ids}
+        val_cov_dict = {val_id: self.train_cov_dict[val_id] for val_id in val_ids}
+        val_dicts = val_imgs_dict, val_labels_dict, val_cov_dict, val_ids
+
+        val_set = KidneyDataset(data_dicts=val_dicts, include_cov=self.args.include_cov)
+        val_generator = DataLoader(val_set, **self.dataloader_params)
         return val_generator
 
     def test_dataloader(self):
-        X_test, y_test, cov_test = self._test_set
-        test_set = KidneyDataset(X_test, y_test, cov_test)
-        test_generator = DataLoader(test_set,
-                                    collate_fn=self._pad_collate if self.args.standardize_seq_length else None,
-                                    **self.params)
+        test_generator = DataLoader(self.test_set, **self.dataloader_params)
         return test_generator
+
+    def st_test_dataloader(self):
+        st_test_generator = DataLoader(self.st_test_set, **self.dataloader_params)
+        return st_test_generator
+
+    def stan_test_dataloader(self):
+        stan_test_generator = DataLoader(self.stan_test_set, **self.dataloader_params)
+        return stan_test_generator
+
+    def ui_test_dataloader(self):
+        ui_test_generator = DataLoader(self.ui_test_set, **self.dataloader_params)
+        return ui_test_generator
 
 
 # ==DATA LOADING==:
 class KidneyDataset(torch.utils.data.Dataset):
-    def __init__(self, X: list, y: list, cov: list):
-        """If <include_cov>, each item becomes a tuple of (dictionary of img X and covariates, target label). Otherwise,
-        each item is a tuple of (image X, target label)."""
-        self.X = [torch.from_numpy(e).float() for e in X]
-        self.y = y
-        self.cov = cov
+    def __init__(self, data_dicts, include_cov=False, rand_crop=False):
+        self.image_dict, self.label_dict, self.cov_dict, self.study_ids = data_dicts
+        self.include_cov = include_cov
 
     def __getitem__(self, index):
-        imgs, target, cov = self.X[index], self.y[index], self.cov[index]
-        return imgs, target, cov
+        id_ = list(self.study_ids)[index]
+        img, y, cov = self.image_dict[id_], self.label_dict[id_], self.cov_dict[id_]
+
+        id_split = id_.split("_")
+        data = {'img': torch.FloatTensor(img)}
+
+        if self.include_cov:
+            data['Side_L'] = torch.FloatTensor([1 if id_split[1] == 'Left' else 0])
+            data['Age_wks'] = torch.FloatTensor([cov['Age_wks']])
+            
+            if data['Age_wks'] is None or math.isnan(data['Age_wks']):
+                data['Age_wks'] = torch.FloatTensor([36])
+
+        return data, y, id_
 
     def __len__(self):
-        return len(self.X)
+        return len(self.study_ids)
 
-    def get_class_proportions(self):
-        """Returns an array of values inversely proportional to the number of items in the class. Classes with a greater
-        number of examples compared to other classes receives lesser weight.
-        """
-        counts = np.bincount(self.y)
-        labels_weights = 1. / counts
-        weights = labels_weights[self.y]
-        return weights
-
-
-def create_data_loaders(X_train, y_train, cov_train, X_val, y_val, cov_val, X_test, y_test, cov_test,
-                        args, params, val_test_params):
-    # Datasets
-    training_set = KidneyDataset(X_train, y_train, cov_train)
-    val_set = KidneyDataset(X_val, y_val, cov_val) if (X_val is not None) else None
-    test_set = KidneyDataset(X_test, y_test, cov_test)
-
-    # Weighted sampling
-    if args.balance_classes:
-        samples_weight = torch.from_numpy(training_set.get_class_proportions())
-        print(samples_weight)
-        sampler = WeightedRandomSampler(torch.DoubleTensor(samples_weight), len(training_set))
-        params["shuffle"] = False
-        params["sampler"] = sampler
-
-    _pad_collate = partial(pad_collate, include_cov=args.include_cov)
-
-    # Data Loaders
-    training_generator = DataLoader(training_set,
-                                    collate_fn=_pad_collate if args.standardize_seq_length else None,
-                                    **params)
-    val_generator = DataLoader(val_set,
-                               collate_fn=_pad_collate if args.standardize_seq_length else None,
-                               **val_test_params) if (X_val is not None) else None
-
-    test_generator = DataLoader(test_set,
-                                collate_fn=_pad_collate if args.standardize_seq_length else None,
-                                **val_test_params)
-
-    return training_generator, val_generator, test_generator
+    # def get_class_proportions(self):
+    #     """Returns an array of values inversely proportional to the number of items in the class. Classes with a greater
+    #     number of examples compared to other classes receives lesser weight.
+    #     """
+    #     counts = np.bincount(self.y)
+    #     labels_weights = 1. / counts
+    #     weights = labels_weights[self.y]
+    #     return weights
 
 
-def recreate_train_test_split(X_train, y_train, cov_train,
-                              X_test, y_test, cov_test):
-    """Recombine split data. Shuffle then split 70-30 by patients.
+def load_dataset(json_infile, test_prop, data_dir, ordered_split=False, train_only=False):
+    """Return dictionaries of train (and optionally test) set, where each key is the study ID of some patient.
 
-    ==Precondition==:
-        - <cov_train> and <cov_test> have been parsed into dictionaries.
+    @param json_infile: json containing information about each patient and file paths to each kidney side
+    @param test_prop: proportion to leave as test set
+    @param data_dir: path to directory containing files
+    @param ordered_split: sort by date before splitting by patient id
+    @param train_only: split dataset into train-test split if true
     """
-    X = np.concatenate([X_train, X_test])
-    y = y_train + y_test
-    cov = cov_train + cov_test
+    with open(data_dir + json_infile, 'r') as fp:
+        in_dict = json.load(fp)
 
-    data_by_patients = group_data_by_ID(X, y, cov)
-    data_by_patients = shuffle(data_by_patients, random_state=1)
-    train_data_, test_data_ = split_data(data_by_patients, 0.3)
+    if 'SU2bae8dc' in in_dict:
+        in_dict.pop('SU2bae8dc', None)
 
-    train_data = []
-    for d in train_data_:
-        train_data.extend(d)
-    test_data = []
-    for d in test_data_:
-        test_data.extend(d)
+    if train_only:
+        train_out = in_dict
+        return train_out, None
+    else:
+        pt_ids = list(in_dict.keys())
+        BL_dates = []
+        for my_key in pt_ids:
+            if 'BL_date' in in_dict[my_key].keys():
+                BL_dates.extend([in_dict[my_key]['BL_date']])
+            else:
+                BL_dates.extend(['2021-01-01'])
 
-    X_train_, y_train_, cov_train_ = zip(*train_data)
-    X_test_, y_test_, cov_test_ = zip(*test_data)
+        if ordered_split:
+            sorted_pt_BL_dates = sorted(zip(pt_ids, BL_dates))
+            test_n = round(len(pt_ids) * test_prop)
+            train_out = dict()
+            test_out = dict()
 
-    return X_train_, y_train_, cov_train_, X_test_, y_test_, cov_test_
+            for i in range(len(pt_ids) - test_n):
+                study_id, _ = sorted_pt_BL_dates[i]
+                train_out[study_id] = in_dict[study_id]
+
+            for i in range(len(pt_ids) - test_n + 1, len(pt_ids)):
+                study_id, _ = sorted_pt_BL_dates[i]
+                test_out[study_id] = in_dict[study_id]
+        else:
+            shuffled_pt_id, shuffled_BL_dates = shuffle(list(pt_ids), BL_dates, random_state=42)
+            test_n = round(len(shuffled_pt_id) * test_prop)
+            train_out = dict()
+            test_out = dict()
+
+            for i in range(test_n):
+                study_id = shuffled_pt_id[i]
+                test_out[study_id] = in_dict[study_id]
+
+            for i in range(test_n + 1, len(shuffled_pt_id)):
+                study_id = shuffled_pt_id[i]
+                train_out[study_id] = in_dict[study_id]
+
+        return train_out, test_out
 
 
-def make_validation_set(X_train, y_train, cov_train, cv=False, num_folds=5, train_val_split=0.2):
-    """HELPER FUNCTION. Split training data into training and validation splits. If cross-fold validation specified,
-    return generator of <num_folds> train-val splits.
+def load_test_dataset(json_infile, data_dir):
+    with open(data_dir + json_infile, 'r') as fp:
+        in_dict = json.load(fp)
 
-    If include_validation is false, then return the same input.
+    if 'SU2bae8dc' in in_dict:
+        in_dict.pop('SU2bae8dc', None)
+
+    return in_dict
+
+
+def get_data_dicts(in_dict, data_dir, update_num=None, silent_trial=False, last_visit_only=False, seq=False):
+    """Return tuple containing 3 dictionaries of images, labels, covariates and a list of study IDs.
+
+    :param in_dict: Dictionary of nested dictionaries, where outermost keys correspond to patient IDs.
+    :param data_dir: Path to data directory
+    :param silent_trial: If data is from silent trial, perform specific processing
+    :param update_num: Number to append to patient ID if transformation is applied
+    :param last_visit_only: If true, only include the last ultrasound visit.
+    :param seq: If true, returned dicts will contain sequences (lists) of images and covariates, corresponding to visits
     """
+    img_dict = dict()
+    label_dict = dict()
+    cov_dict = dict()
+
+    for study_id in in_dict.keys():
+        try:
+            sides = np.setdiff1d(list(in_dict[study_id].keys()), ['BL_date', 'Sex'])
+            for side in sides:
+                surgery = get_surgery_label(in_dict[study_id][side])
+                us_nums = [my_key for my_key in in_dict[study_id][side].keys() if my_key != 'surgery']
+
+                if len(us_nums) == 0 or surgery is None:
+                    continue
+
+                if last_visit_only:
+                    us_nums = sorted(us_nums)[-1]
+
+                for us_num in us_nums:
+                    if in_dict[study_id][side][us_num]['Age_wks'] in ["NA", None] or \
+                            not {'sag', 'trv'}.issubset(in_dict[study_id][side][us_num].keys()):
+                        continue
+
+                    dict_key = study_id + "_" + side
+                    dict_key += f"_{us_num}" if not seq else ""
+                    dict_key += f"_{update_num}" if update_num is not None else ""
+
+                    if dict_key not in img_dict:
+                        img_dict[dict_key] = dict() if not seq else list()
+
+                    if silent_trial:
+                        sag_img = process_input_image(data_dir + in_dict[study_id][side][us_num]['sag'])
+                        trv_img = process_input_image(data_dir + in_dict[study_id][side][us_num]['trv'])
+                    else:
+                        sag_img = special_ST_preprocessing(data_dir + in_dict[study_id][side][us_num]['sag'])
+                        trv_img = special_ST_preprocessing(data_dir + in_dict[study_id][side][us_num]['trv'])
+
+                    assign_images(img_dict, dict_key, sag_img, trv_img, split_view=False, seq=seq)
+
+                    label_dict[dict_key] = surgery
+
+                    if dict_key not in cov_dict:
+                        cov_dict[dict_key] = dict() if not seq else defaultdict(list)
+                    machine = in_dict[study_id][side][us_num]['US_machine']
+                    sex = in_dict[study_id]['Sex']
+                    age_wks = in_dict[study_id][side][us_num]['Age_wks']
+
+                    assign_covariates(cov_dict, dict_key, machine, sex, age_wks, seq=seq)
+                    assert label_dict[dict_key] is not None
+                    assert img_dict[dict_key] is not None
+                    assert cov_dict[dict_key]['Sex'] is not None
+                    assert cov_dict[dict_key]['Age_wks'] is not None
+        except AttributeError as e:
+            print(e)
+        except AssertionError as f:
+            print(f)
+            raise AssertionError
+
+    ids = list(img_dict.keys())
+    return img_dict, label_dict, cov_dict, ids
+
+
+def make_validation_set(train_study_ids, train_labels, cv=False, num_folds=5, train_val_split=0.2):
+    """Split training data into training and validation splits using IDs."""
     if not cv:
-        X_train, X_val = split_data(X_train, train_val_split)
-        y_train, y_val = split_data(y_train, train_val_split)
-        cov_train, cov_val = split_data(cov_train, train_val_split)
-        return [(X_train, y_train, cov_train, X_val, y_val, cov_val)]
+        raise NotImplementedError()
+        # X_train, X_val = split_data(X_train, train_val_split)
+        # y_train, y_val = split_data(y_train, train_val_split)
+        # cov_train, cov_val = split_data(cov_train, train_val_split)
+        # return [(X_train, y_train, cov_train, X_val, y_val, cov_val)]
     else:
         skf = StratifiedKFold(n_splits=num_folds, shuffle=True, random_state=42)
-
-        return [(X_train[train_index], y_train[train_index], cov_train[train_index],
-                 X_train[val_index], y_train[val_index], cov_train[val_index]) for train_index, val_index in
-                skf.split(X_train, y_train)]
+        # Get training set and validation set IDs of the form ((train_idx, val_idx), (train_idx, val_idx), ...)
+        return list(skf.split(train_study_ids, train_labels))
 
 
 # ==HELPER FUNCTIONS==:
-def pad_collate(batch, include_cov=False):
-    """Pad batch to be of the longest sequence length.
-
-    @returns tuple containing (padded X, y, cov and length of each sequence in batch)
-    """
-    x_t, y_t, cov_t = zip(*batch)
-
-    x_lens = [len(x) for x in x_t]
-    x_pad = pad_sequence(x_t, batch_first=True, padding_value=0)
-
-    # Perform padding in-place (for target and covariates)
-    y_t = [list(y) if not isinstance(y, np.int32) else y for y in y_t]
-    for y in y_t:
-        if isinstance(y, list) and (len(y) != max(x_lens)):  # zero-padding
-            y.extend([0.] * abs(len(y) - max(x_lens)))
-            assert len(y) == max(x_lens)
-
-    if include_cov:
-        for cov in cov_t:
-            if len(cov["Side_L"]) != max(x_lens):  # pad with empty dictionary
-                cov["Side_L"].extend([0.] * abs(len(cov["Side_L"]) - max(x_lens)))
-                cov["Age_wks"].extend([0.] * abs(len(cov["Side_L"]) - max(x_lens)))
-                assert len(cov["Side_L"]) == max(x_lens)
-        # side_t = zip([np.array(cov["Side_L"]) for cov in cov_t])
-        # age_t = zip([np.array(cov["Age_wks"]) for cov in cov_t])
-        # covs = {"Age_wks": np.array([cov['Age_wks'][t] for cov in cov_t]),
-        #         "Side_L": np.array([cov['Side_L'][t] for cov in cov_t])}
-        cov_t = np.array(cov_t)
-    return (x_pad, np.array(x_lens)), np.array(y_t), cov_t
+def get_surgery_label(side_dict: dict):
+    """Given dictionary for a kidney side, extract surgery label (1/0). Return None if not found."""
+    surgery = None
+    if type(side_dict) == dict:
+        if 'surgery' in list(side_dict.keys()):
+            if type(side_dict['surgery']) == int:
+                surgery = side_dict['surgery']
+            elif type(side_dict['surgery']) == list:
+                s1 = [i for i in side_dict['surgery'] if type(i) == int]
+                if len(s1) > 0:
+                    surgery = s1[0]
+    return surgery
 
 
-def split_data(data, split: int):
-    return data[:-int(len(data) * split)], data[-int(len(data) * split):]
-
-
-def group_data_by_ID(X_, y_, cov_):
-    """Group by patient IDs. Return a list where each item in the list corresponds to a unique patient's data."""
-    ids = [c["ID"] for c in cov_]
-    data_by_id = {id_: [] for id_ in ids}
-
-    for i in range(len(X_)):
-        id_ = cov_[i]["ID"]
-        data_by_id[id_].append((X_[i], y_[i], cov_[i]))
-
-    return list(data_by_id.values())
-
-
-def prepare_data_into_sequences(X_train, y_train, cov_train,
-                                X_test, y_test, cov_test,
-                                single_visit, single_target):
-    """Prepare data into sequences of (pairs of images)."""
-
-    def sort_data_by_ID(t_x, t_y, t_cov):
-        """Sort by patient IDs."""
-        # cov_train_, X_train_, y_train_ = zip(*sorted(zip(t_cov, t_x, t_y), key=lambda x: float(x[0].split("_")[0])))
-        cov_train_, X_train_, y_train_ = zip(*sorted(zip(t_cov, t_x, t_y), key=lambda x: x[0]["ID"]))
-        return X_train_, y_train_, cov_train_
-
-    def group(t_x, t_y, t_cov, include_side=True):
-        """Group images according to patient ID. If <include_side>, groups by patient ID and by kidney side.
-        And sort by date.
-        """
-        x, y, cov = defaultdict(list), defaultdict(list), defaultdict(list)
-        for i in range(len(t_cov)):
-            if include_side:  # split data per kidney e.g 5.0Left, 5.0Right, 6.0Left, ...
-                # id_ = t_cov[i].split("_")[0] + t_cov[i].split("_")[4]
-                id_ = f"{t_cov[i]['ID']}_{t_cov[i]['Side_L']}"
-            else:  # split only on id e.g. 5.0, 6.0, 7.0, ...
-                # id_ = t_cov[i].split("_")[0]
-                id_ = str(t_cov[i]['ID'])
-            x[id_].append(t_x[i])
-            y[id_].append(t_y[i])
-            cov[id_].append(t_cov[i])
-
-        # Sort by date
-        for id_ in x.keys():
-            x[id_], y[id_], cov[id_] = zip(*sorted(zip(x[id_], y[id_], cov[id_]),
-                                                   key=lambda p: p[2]["Imaging_Date"]))
-
-        for id_ in cov.keys():
-            cov[id_] = {u: [cov_[u] for cov_ in cov[id_]] for u, v in cov[id_][0].items()}
-            cov[id_]['ID'] = cov[id_]['ID'][0]
-
-        # Convert to numpy array
-        X_grouped = np.asarray([np.asarray(e) for e in list(x.values())])
-        return X_grouped, np.asarray(list(y.values()), dtype=object), np.asarray(list(cov.values()), dtype=object)
-
-    def get_only_last_visits(t_x, t_y, t_cov):
-        """Slice data to get only latest n visits."""
-        x, y, cov = [], [], []
-        for i, e in enumerate(t_x):
-            curr_x = e[-1:]
-            curr_x = curr_x.transpose((1, 0, 2, 3))
-            curr_x = curr_x.squeeze()
-            x.append(curr_x)
-            y.append(t_y[i][-1])
-            # cov.append(t_cov[i][-1])
-            cov.append({u: v[-1] if not isinstance(v, float) else v for u, v in t_cov[i].items()})
-
-        return np.asarray(x, dtype=np.float64), y, cov
-
-    X_train, y_train, cov_train = sort_data_by_ID(X_train, y_train, cov_train)
-    X_test, y_test, cov_test = sort_data_by_ID(X_test, y_test, cov_test)
-
-    if not single_visit:  # group images by patient ID and sort by date
-        X_train, y_train, cov_train = group(X_train, y_train, cov_train)
-        X_test, y_test, cov_test = group(X_test, y_test, cov_test)
-
-        if single_target:
-            y_train = np.array([seq[-1] for seq in y_train])
-            y_test = np.array([seq[-1] for seq in y_test])
-
-    if single_visit:  # only test on last visit
-        X_test, y_test, cov_test = group(X_test, y_test, cov_test)
-        X_test, y_test, cov_test = get_only_last_visits(X_test, y_test, cov_test)
-
-        # if single_target:   # notice that test already has only 1 y-value
-        #     y_train = np.array([seq[-1] for seq in y_train])
-
-    return np.array(X_train), np.array(y_train), np.array(cov_train), np.array(X_test), np.array(y_test), np.array(cov_test)
-
-
-def parse_cov(cov: str, side=True, age=True, sex=False) -> dict:
-    """HELPER FUNCTION. Given a string, extract specified covariates. By default, extracts kidney side and
-    age (in weeks)."""
-    # If already a dictionary, simply return the same dictionary
-    if isinstance(cov, dict):
-        return cov
-
-    cov_dict = {}
-    cov_split = cov.split("_")
-    try:
-        cov_dict["Imaging_Date"] = datetime.strptime(cov_split[6], "%Y-%m-%d")
-        cov_dict["BL_Date"] = datetime.strptime(cov_split[5], "%Y-%m-%d")  # date of first visit
-
-        if cov_dict["Imaging_Date"].year > datetime.now().year or cov_dict["Imaging_Date"].year < 1990:
-            raise ValueError
-    except ValueError:  # if error in parsing date, return None
-        return None
-
-    cov_dict["ID"] = float(cov_split[0])
-
-    if age:
-        cov_dict["Age_wks"] = float(cov_split[1]) \
-                                + (cov_dict["Imaging_Date"] - cov_dict["BL_Date"]).days // 7
-
-        if cov_dict["Age_wks"] < 0:
-            print("Negative age detected!")
-            print("Age_wks: ", cov_dict["Age_wks"])
-            print("Imaging_Date: ", cov_dict["Imaging_Date"])
-            print("BL_Date: ", cov_dict["BL_Date"])
-            return None
-    if side:
-        cov_dict["Side_L"] = 1 if cov_split[4] == 'Left' else 0
-    if sex:
-        cov_dict["Sex"] = 1 if cov_split[2] == "M" else "F"
-
-    return cov_dict
-
-
-def remove_unnecessary_cov(cov):
-    if isinstance(cov, dict):
-        cov.pop("ID")
-        cov.pop("Imaging_Date")
-        cov.pop("BL_Date")
+def assign_images(img_dict: dict, dict_key: str, sag_img, trv_img, split_view=False, seq=False):
+    """Assign or append images (separately or combined) to <img_dict>."""
+    if not seq:
+        if split_view:
+            img_dict[dict_key]['sag'] = sag_img
+            img_dict[dict_key]['trv'] = trv_img
+        else:
+            img_dict[dict_key] = np.stack([sag_img, trv_img])
     else:
-        try:
-            for c in cov:
-                remove_unnecessary_cov(c)
-        except TypeError:
-            pass
+        if split_view:
+            raise NotImplementedError("Sequences of split views (trans, sag) is not implemented!")
+        else:
+            img_dict[dict_key].append(np.stack([sag_img, trv_img]))
 
 
-def remove_invalid_samples(X, y, cov):
-    """Return (X, y, cov), where all samples with incorrectly parsed covariates are removed (i.e. None)."""
-    filtered_data = []
-    for data in zip(X, y, cov):
-        if data[2] is not None:
-            filtered_data.append(data)
+def assign_covariates(cov_dict: dict, dict_key: str, machine: str, sex, age_wks, seq=False):
+    """Assign covariates to key in <cov_dict>, or append covariates to list at key in <cov_dict> if building a sequence.
+    """
+    if not seq:
+        cov_dict[dict_key]['US_machine'] = machine
+        if type(sex) == int:
+            cov_dict[dict_key]['Sex'] = sex
+        else:
+            cov_dict[dict_key]['Sex'] = 1 if (sex == "M") else 2
+        cov_dict[dict_key]['Age_wks'] = age_wks
+    else:
+        cov_dict[dict_key]['US_machine'].append(machine)
+        if type(sex) == int:
+            cov_dict[dict_key]['Sex'].append(sex)
+        else:
+            cov_dict[dict_key]['Sex'].append(1 if (sex == "M") else 2)
+        cov_dict[dict_key]['Age_wks'].append(age_wks)
 
-    return zip(*filtered_data)
+
+def flatten(lst):
+    # from https://stackoverflow.com/questions/2158395/flatten-an-irregular-list-of-lists
+    return eval('[' + str(lst).replace('[', '').replace(']', '') + ']')
+
+
+# ==IMAGE PREPROCESSING FUNCTIONS==:
+def pad_img_le(image_in, dim=256, random_pad=False):
+    """
+    :param image_in: input image
+    :param dim: desired dimensions of padded image (should be bigger or as big as all input images)
+    :param random_pad: pad random amount (and flip horizontally randomly)
+    :return: padded image
+    """
+    im_shape = image_in.shape
+    while im_shape[0] > dim or im_shape[1] > dim:
+        image_in = resize(image_in, ((im_shape[0] * 4) // 5, (im_shape[1] * 4) // 5), anti_aliasing=True)
+        im_shape = image_in.shape
+
+    if random_pad:
+        if random.random() >= 0.5:
+            image_in = cv2.flip(image_in, 1)
+
+        rand_h = np.random.uniform(0, 1, 1)
+        rand_v = np.random.uniform(0, 1, 1)
+        right = math.floor((dim - im_shape[1]) * rand_h)
+        left = math.ceil((dim - im_shape[1]) * (1 - rand_h))
+        bottom = math.floor((dim - im_shape[0]) * rand_v)
+        top = math.ceil((dim - im_shape[0]) * (1 - rand_v))
+    else:
+        right = math.floor((dim - im_shape[1]) / 2)
+        left = math.ceil((dim - im_shape[1]) / 2)
+        bottom = math.floor((dim - im_shape[0]) / 2)
+        top = math.ceil((dim - im_shape[0]) / 2)
+
+    image_out = cv2.copyMakeBorder(image_in, top, bottom, left, right, cv2.BORDER_CONSTANT, value=0)
+    return image_out
+
+
+def autocrop(image, threshold=0):
+    """Crops any edges below or equal to threshold
+
+    from fviktor here: https://stackoverflow.com/questions/13538748/crop-black-edges-with-opencv
+    Crops blank image to 1x1.
+
+    Returns cropped image.
+    """
+    if len(image.shape) == 3:
+        flatImage = np.max(image, 2)
+    else:
+        flatImage = image
+    assert len(flatImage.shape) == 2
+
+    rows = np.where(np.max(flatImage, 0) > threshold)[0]
+    if rows.size:
+        cols = np.where(np.max(flatImage, 1) > threshold)[0]
+        image = image[cols[0]: cols[-1] + 1, rows[0]: rows[-1] + 1]
+    else:
+        image = image[:1, :1]
+
+    return image
+
+
+def set_contrast(image, contrast=1):
+    """Set contrast in image
+
+    :param image: input image
+    :param contrast: contrast type
+    :return: image with revised contrast
+    """
+    out_img = None
+    if contrast == 0:
+        out_img = image
+    elif contrast == 1:
+        out_img = exposure.equalize_hist(image)
+    elif contrast == 2:
+        out_img = exposure.equalize_adapthist(image)
+    elif contrast == 3:
+        out_img = exposure.rescale_intensity(image)
+    return out_img
+
+
+def crop_image(image, random_crop=False):
+    # IMAGE_PARAMS = {0: [2.1, 4, 4],
+    #                 # 1: [2.5, 3.2, 3.2],
+    #                 # 2: [1.7, 4.5, 4.5] # [2.5, 3.2, 3.2] # [1.7, 4.5, 4.5]
+    #                 }
+    width = image.shape[1]
+    height = image.shape[0]
+
+    if random_crop:
+        par1 = random.uniform(1.5, 2.8)
+        par2 = random.uniform(3, 4.5)
+        par3 = random.uniform(3, 4.5)
+    else:
+        par1 = 2.1
+        par2 = 4
+        par3 = 4
+
+    new_dim = int(width // par1)  # final image will be square of dim width/2 * width/2
+
+    start_col = int(width // par2)  # column (width position) to start from
+    start_row = int(height // par3)  # row (height position) to start from
+
+    cropped_image = image[start_row:start_row + new_dim, start_col:start_col + new_dim]
+
+    return cropped_image
+
+
+def special_ST_preprocessing(img_file, output_dim=256):
+    if "preprocessed" in img_file:
+        my_img = process_input_image(img_file)
+    else:
+        img_name = img_file.split('/')[len(img_file.split('/')) - 1]
+        img_folder = "/".join(img_file.split('/')[:-2])
+        if not os.path.exists(img_folder + "/Preprocessed/"):
+            os.makedirs(img_folder + "/Preprocessed/")
+        out_img_filename = img_folder + "/Preprocessed/" + img_name.split('.')[0] + "-preprocessed.png"
+
+        if not os.path.exists(out_img_filename):
+            image = np.array(Image.open(img_file).convert('L'))
+            image_grey = img_as_float(image)
+            cropped_img = image_grey
+            resized_img = transform.resize(cropped_img, output_shape=(output_dim, output_dim))
+            my_img = set_contrast(resized_img)  # ultimately add contrast variable
+            Image.fromarray(my_img * 255).convert('RGB').save(out_img_filename)
+        my_img = np.array(Image.open(out_img_filename).convert('L'))
+    return my_img
+
+
+def process_input_image(img_file, crop=None, random_crop=None):
+    """Processes image: crop, convert to greyscale and resize
+    
+    :param img_file: path to image
+    :param crop: crop image if true
+    :param random_crop: randomly crop
+    :return: formatted image
+    """
+    fit_img = np.array(Image.open(img_file).convert('L'))
+    if fit_img.shape[0] != 256 or fit_img.shape[1] != 256:
+        print(img_file)
+        fit_img = special_ST_preprocessing(img_file)
+
+    return fit_img

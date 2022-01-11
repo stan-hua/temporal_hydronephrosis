@@ -5,7 +5,7 @@ import numpy as np
 import torch
 from torch import nn
 
-from models.baseline import SiamNet
+from models.baseline_pl import SiamNet
 
 
 # noinspection PyTypeChecker,PyUnboundLocalVariable
@@ -15,31 +15,26 @@ class SiamNetConvPooling(SiamNet):
         max pooling over time.
         """
         x_t = data['img']
-
-        if self.cov_layers:
-            cov_dict = data['cov']
+        x_t = x_t.transpose(0, 1)
 
         t_embeddings = []
-        x_t = x_t.transpose(0, 1)
         for t, x in enumerate(x_t):
-            if torch.mean(x) == 0:  # stop once hit zero padded image
-                break
-
-            if self.num_inputs == 1:
-                x = x.unsqueeze(1)
-
             B, T, C, H = x.size()
             x = x.transpose(0, 1)
+
             x_list = []
             for i in range(self.num_inputs):
-                curr_x = torch.unsqueeze(x[i], 1)
-                curr_x = curr_x.expand(-1, 3, -1, -1)
-                z = self.conv(curr_x)
-                z = self.fc6(z)
-                z = self.fc6b(z)
+                z = torch.unsqueeze(x[i], 1)
+                z = z.expand(-1, 3, -1, -1)
+                z = self.conv1(z)
+                z = self.conv2(z)
+                z = self.conv3(z)
+                z = self.conv4(z)
+                z = self.conv5(z)
+                z = self.conv6(z)
+                z = self.conv7(z)
                 z = z.view([B, 1, -1])
-
-                z = self.fc6c(z)
+                z = self.fc8(z)
                 z = z.view([B, 1, -1])
                 x_list.append(z)
 
@@ -47,20 +42,67 @@ class SiamNetConvPooling(SiamNet):
             x = x.view(B, -1)
 
             if self.cov_layers:
-                age = torch.from_numpy(np.array([cov_dict_['Age_wks'][t] for cov_dict_ in cov_dict])).type(
-                    torch.FloatTensor).to(self.device, non_blocking=True).view(B, 1)
-                side = torch.from_numpy(np.array([cov_dict_['Side_L'][t] for cov_dict_ in cov_dict])).type(
-                    torch.FloatTensor).to(self.device, non_blocking=True).view(B, 1)
+                x = self.fc9(x)
+                x = self.fc10(x)
 
-                age = age.expand(-1, 512)  # (B, 512)
-                side = side.expand(-1, 512)
+                age = data['Age_wks'].view(B, 1)
+                side = data['Side_L'].view(B, 1)
+
                 x = torch.cat((x, age, side), 1)
+                x = self.fc10b(x)
 
             t_embeddings.append(x)
 
         x, _ = torch.max(torch.stack(t_embeddings), dim=0)
-        x = self.fc7_new(x)
-        x = self.fc8(x)
-        pred = self.classifier_new(x)
 
-        return pred
+        if not self.cov_layers:
+            x = self.fc9(x)
+            x = self.fc10(x)
+        else:
+            x = self.fc10c(x)
+
+        return torch.log_softmax(x, dim=1)
+
+    @torch.no_grad()
+    def forward_embed(self, data):
+        x_t = data['img']
+        x_t = x_t.transpose(0, 1)
+
+        t_embeddings = []
+        for t, x in enumerate(x_t):
+            B, T, C, H = x.size()
+            x = x.transpose(0, 1)
+
+            x_list = []
+            for i in range(self.num_inputs):
+                z = torch.unsqueeze(x[i], 1)
+                z = z.expand(-1, 3, -1, -1)
+                z = self.conv1(z)
+                z = self.conv2(z)
+                z = self.conv3(z)
+                z = self.conv4(z)
+                z = self.conv5(z)
+                z = self.conv6(z)
+                z = self.conv7(z)
+                z = z.view([B, 1, -1])
+                z = self.fc8(z)
+                z = z.view([B, 1, -1])
+                x_list.append(z)
+
+            x = torch.cat(x_list, 1)
+            x = x.view(B, -1)
+
+            if self.cov_layers:
+                x = self.fc9(x)
+                x = self.fc10(x)
+
+                age = data['Age_wks'].view(B, 1)
+                side = data['Side_L'].view(B, 1)
+
+                x = torch.cat((x, age, side), 1)
+                x = self.fc10b(x)
+
+            t_embeddings.append(x)
+
+        x, _ = torch.max(torch.stack(t_embeddings), dim=0)
+        return x.cpu().detach().numpy()

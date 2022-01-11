@@ -25,6 +25,10 @@ class SiamNet(pl.LightningModule):
         # Save hyperparameters to checkpoint
         self.save_hyperparameters()
 
+        self.loss = torch.nn.NLLLoss(weight=torch.tensor((0.12, 0.88)))      # weight=torch.tensor((0.15, 0.85))
+        # self.loss = torch.nn.CrossEntropyLoss()
+
+
         # CONVOLUTIONAL BLOCKS
         self.conv1 = nn.Sequential()
         self.conv1.add_module('conv1_s1', nn.Conv2d(3, 96, kernel_size=11, stride=2, padding=0, bias=False))
@@ -94,10 +98,7 @@ class SiamNet(pl.LightningModule):
             self.fc10b.add_module('relu10b', nn.ReLU(inplace=True))
 
             self.fc10c = nn.Sequential()
-            self.fc10c.add_module('fc10c', nn.Linear(classes + 126, classes))
-
-        self.loss = torch.nn.NLLLoss(weight=torch.tensor((0.12, 0.88)))      # weight=torch.tensor((0.15, 0.85))
-        # self.loss = torch.nn.CrossEntropyLoss()
+            self.fc10c.add_module('fc10c', nn.Linear(self.output_dim, classes))
 
     def load(self, checkpoint):
         model_dict = self.state_dict()
@@ -126,9 +127,6 @@ class SiamNet(pl.LightningModule):
     def forward(self, data):
         x = data['img']
 
-        if self.cov_layers:
-            cov_dict = data['cov']
-
         B, T, C, H = x.size()
         x = x.transpose(0, 1)
         x_list = []
@@ -153,8 +151,8 @@ class SiamNet(pl.LightningModule):
         x = self.fc10(x)
 
         if self.cov_layers:
-            age = cov_dict['Age_wks'].type(torch.FloatTensor).to(self.device, non_blocking=True).view(B, 1)
-            side = cov_dict['Side_L'].type(torch.FloatTensor).to(self.device, non_blocking=True).view(B, 1)
+            age = data['Age_wks'].view(B, 1)
+            side = data['Side_L'].view(B, 1)
 
             x = torch.cat((x, age, side), 1)
             x = self.fc10b(x)
@@ -162,16 +160,46 @@ class SiamNet(pl.LightningModule):
 
         return torch.log_softmax(x, dim=1)
 
-    def training_step(self, train_batch, batch_idx):
-        data, y_true, cov = train_batch
-        data_dict = {}
-        if self.args.standardize_seq_length:
-            data_dict['img'] = data[0]
-            data_dict['length'] = data[1]
-        else:
-            data_dict['img'] = data
+    @torch.no_grad()
+    def forward_embed(self, data):
+        x = data['img']
 
-        data_dict['cov'] = cov if self.args.include_cov else None
+        B, T, C, H = x.size()
+        x = x.transpose(0, 1)
+        x_list = []
+        for i in range(self.num_inputs):
+            z = torch.unsqueeze(x[i], 1)
+            z = z.expand(-1, 3, -1, -1)
+            z = self.conv1(z)
+            z = self.conv2(z)
+            z = self.conv3(z)
+            z = self.conv4(z)
+            z = self.conv5(z)
+            z = self.conv6(z)
+            z = self.conv7(z)
+            z = z.view([B, 1, -1])
+            z = self.fc8(z)
+            z = z.view([B, 1, -1])
+            x_list.append(z)
+
+        x = torch.cat(x_list, 1)
+        x = x.view(B, -1)
+
+        if not self.cov_layers:
+            return x.cpu().detach().numpy()
+        else:
+            x = self.fc9(x)
+            x = self.fc10(x)
+
+            age = data['Age_wks'].view(B, 1)
+            side = data['Side_L'].view(B, 1)
+
+            x = torch.cat((x, age, side), 1)
+            x = self.fc10b(x)
+            return x.cpu().detach().numpy()
+
+    def training_step(self, train_batch, batch_idx):
+        data_dict, y_true, id_ = train_batch
 
         out = self.forward(data_dict)
         y_pred = torch.argmax(out, dim=1)
@@ -191,16 +219,7 @@ class SiamNet(pl.LightningModule):
         return loss
 
     def validation_step(self, val_batch, batch_idx):
-        data, y_true, cov = val_batch
-
-        data_dict = {}
-        if self.args.standardize_seq_length:
-            data_dict['img'] = data[0]
-            data_dict['length'] = data[1]
-        else:
-            data_dict['img'] = data
-
-        data_dict['cov'] = cov if self.args.include_cov else None
+        data_dict, y_true, id_ = val_batch
 
         out = self.forward(data_dict)
         y_pred = torch.argmax(out, dim=1)
@@ -222,24 +241,12 @@ class SiamNet(pl.LightningModule):
         self.log('val_auprc', auprc, on_step=False, on_epoch=True, prog_bar=True)
 
     def test_step(self, test_batch, batch_idx):
-        data, y_true, cov = test_batch
-
-        data_dict = {}
-        if self.args.standardize_seq_length:
-            data_dict['img'] = data[0]
-            data_dict['length'] = data[1]
-        else:
-            data_dict['img'] = data
-
-        data_dict['cov'] = cov if self.args.include_cov else None
-
+        data_dict, y_true, id_ = test_batch
         out = self.forward(data_dict)
         y_pred = torch.argmax(out, dim=1)
 
         loss = self.loss(out, y_true)
         acc = torchmetrics.functional.accuracy(y_pred, y_true)
-        # auroc = torchmetrics.functional.auroc(y_prob, y_true, num_classes=2, average="macro")
-        # auprc = torchmetrics.functional.average_precision(y_prob, y_true, num_classes=2)
         auroc = torchmetrics.functional.auroc(out[:, 1], y_true, num_classes=1, average="micro")
         auprc = torchmetrics.functional.average_precision(out[:, 1], y_true, num_classes=1)
 
@@ -248,26 +255,14 @@ class SiamNet(pl.LightningModule):
         self.log('test_auroc', auroc, on_step=False, on_epoch=True)
         self.log('test_auprc', auprc, on_step=False, on_epoch=True)
 
-    def transfer_batch_to_device(self, batch, device, dataloader_idx):
-        data, target, cov = batch
+    def training_epoch_end(self, outputs):
+        pass
 
-        if self.args.standardize_seq_length:
-            return (data[0].to(device, non_blocking=True), torch.from_numpy(data[1])), \
-                   target.type(torch.LongTensor).to(device), self.to_device(cov, device)
-        else:
-            return data.to(device, non_blocking=True), target.type(torch.LongTensor).to(device), \
-                   self.to_device(cov, device)
+    def validation_epoch_end(self, outputs):
+        pass
 
-    def to_device(self, obj, device):
-        if torch.is_tensor(obj):
-            return obj.to(device)
-        elif isinstance(obj, dict):
-            new_obj = {}
-            for k, v in obj.items():
-                new_obj[k] = self.to_device(v, device)
-            return new_obj
-        else:
-            raise NotImplementedError("Only of type tensor and dictionary are implemented!")
+    def test_epoch_end(self, outputs):
+        pass
 
 
 class LRN(nn.Module):

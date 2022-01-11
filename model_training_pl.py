@@ -45,40 +45,50 @@ if torch.cuda.is_available():
 def parseArgs():
     """When running script, parse user input for argument values."""
     parser = argparse.ArgumentParser()
+    parser.add_argument("--git_dir", default="C:/Users/Stanley Hua/projects/")
+    parser.add_argument("--data_dir", default='C:/Users/Stanley Hua/SickKids/Lauren Erdman - HN_Stanley/',
+                        help="Directory where data is located")
+    parser.add_argument("--dir", default="./", help="Directory to save model checkpoints to")
+    parser.add_argument("--checkpoint", default="", help="Path to load pretrained model checkpoint from")
+    parser.add_argument('--pretrained', action="store_true",
+                        help="Use pretrained model with cross validation if cv requested")
+
+    parser.add_argument("--json_infile", default="HNTrain_rootfilenames_20211229.json",
+                        help="Json file of model training data")
+    parser.add_argument("--json_st_test", default="newSTonly_rootfilenames_20211229.json",
+                        help="Json file of held-out, prospective silent trial data")
+    parser.add_argument("--json_stan_test", default="StanfordOnly_rootfilenames_20211229.json",
+                        help="Json file of held-out, retrospective Stanford data")
+    parser.add_argument("--json_ui_test", default="UIonly_rootfilenames_20211229.json",
+                        help="Json file of held-out, retrospective University of Iowa data")
+
+    parser.add_argument("--model", default="baseline",
+                        help="Choose model to run from the following: (baseline, conv_pool, lstm, tsm, stgru)")
     parser.add_argument('--epochs', default=100, type=int, help="Number of epochs")
     parser.add_argument('--batch_size', default=16, type=int, help="Batch size")
     parser.add_argument('--lr', default=0.005, type=float, help="Learning rate")
     parser.add_argument('--momentum', default=0.9, type=float, help="Momentum")
     parser.add_argument("--weight_decay", default=5e-4, type=float, help="Weight decay")
+    parser.add_argument('--adam', action="store_true", help="Use Adam optimizer instead of SGD")
+    parser.add_argument("--output_dim", default=256, type=int, help="output dim for last linear layer")
+    parser.add_argument("--include_cov", action="store_true",
+                        help="Include covariates (age at ultrasound and kidney side (R/L)) in model.")
+
     parser.add_argument("--num_workers", default=1, type=int, help="Number of CPU workers")
-    parser.add_argument("--contrast", default=1, type=int, help="Image contrast to train on")
     parser.add_argument("--split", default=0.7, type=float, help="proportion of dataset to use as training")
+    parser.add_argument('--ordered_split', action="store_true", default=False, help="Use Adam optimizer instead of SGD")
     parser.add_argument("--bottom_cut", default=0.0, type=float, help="proportion of dataset to cut from bottom")
-    parser.add_argument("--crop", default=0, type=int, help="Crop setting (0=big, 1=tight)")
-    parser.add_argument("--output_dim", default=128, type=int, help="output dim for last linear layer")
-    parser.add_argument("--git_dir", default="C:/Users/Stanley Hua/projects/")
+    parser.add_argument('--cv', action='store_true', help="Flag to run cross validation")
     parser.add_argument("--stop_epoch", default=100, type=int,
                         help="If not running cross validation, which epoch to finish with")
-    parser.add_argument("--cv_stop_epoch", default=18, type=int, help="get a pth file from a specific epoch")
-    parser.add_argument("--view", default="siamese", help="siamese, sag, trans")
-    parser.add_argument("--dir", default="./", help="Directory to save model checkpoints to")
-    parser.add_argument("--checkpoint", default="", help="Path to load pretrained model checkpoint from")
-    parser.add_argument("--etiology", default="B", help="O (obstruction), R (reflux), B (both)")
-    parser.add_argument('--cv', action='store_true', help="Flag to run cross validation")
-    parser.add_argument('--adam', action="store_true", help="Use Adam optimizer instead of SGD")
-
-    # Unused arguments
-    parser.add_argument('--pretrained', action="store_true",
-                        help="Use pretrained model with cross validation if cv requested")
-
-    # Newly added arguments
-    parser.add_argument("--model", default="baseline",
-                        help="Choose model to run from the following: (baseline, conv_pool, lstm, tsm, stgru)")
-    parser.add_argument("--early_stopping_patience", default=100, type=int,
-                        help="If validation set specified, determine patience (num. of epochs) to allow stagnant "
-                             "validation loss before stopping.")
     parser.add_argument("--save_frequency", default=100, type=int, help="Save model weights every <x> epochs")
-    parser.add_argument("--include_cov", action="store_true", help="Include covariates in model.")
+    parser.add_argument("--train_only", action="store_true", help="Only fit train/val")
+
+    parser.add_argument("--contrast", default=1, type=int, help="Image contrast to train on")
+    parser.add_argument("--crop", default=0, type=int, help="Crop setting (0=big, 1=tight)")
+    parser.add_argument("--view", default="siamese", help="siamese, sag, trans")
+    parser.add_argument("--etiology", default="B", help="O (obstruction), R (reflux), B (both)")
+
     return parser.parse_args()
 
 
@@ -88,8 +98,8 @@ def modifyArgs(args):
     global model_name
 
     # Model hyperparameters
-    args.lr = 0.001
-    args.batch_size = 128
+    args.lr = 0.0001
+    args.batch_size = 1
     args.adam = False
     args.momentum = 0.8
     args.weight_decay = 0.0005
@@ -102,7 +112,7 @@ def modifyArgs(args):
 
     # Choose model
     model_types = ["baseline", "conv_pool", "lstm", "tsm", "stgru"]
-    args.model = model_types[0]
+    args.model = model_types[1]
 
     if args.model == "baseline":
         model_name = "Siamese_Baseline"
@@ -115,15 +125,15 @@ def modifyArgs(args):
 
     # Data parameters
     if args.model == model_types[0]:  # for single-visit models
-        args.standardize_seq_length, args.single_visit, args.single_target = False, True, False
-    elif args.model == model_types[1]:
-        args.standardize_seq_length, args.single_visit, args.single_target = True, False, True
-        # assert args.batch_size == 1
+        args.standardize_seq_length, args.single_visit = False, True
     else:  # for multiple-visit models
-        args.standardize_seq_length, args.single_visit, args.single_target = True, False, True
+        args.standardize_seq_length, args.single_visit = True, False
+        assert args.batch_size == 1
 
     args.balance_classes = False
     args.num_workers = 4
+
+    args.ordered_split = False
 
     # Test set parameters
     args.test_only = False  # if true, only perform test
@@ -151,11 +161,13 @@ def load_hyperparameters(hyperparameters: dict, path: str):
 
 
 def choose_model(args, hyperparams):
-    global curr_results_dir, best_hyperparameters_folder, device
+    global curr_results_dir, best_hyperparameters_folder
+    device = None
     old_checkpoint = ""
 
     if args.model == "conv_pool":
-        model = SiamNetConvPooling(output_dim=256, device=device, cov_layers=args.include_cov)
+        model = SiamNetConvPooling(output_dim=args.output_dim, cov_layers=args.include_cov,
+                                   args=args, hyperparameters=hyperparams)
         old_checkpoint = f"{results_dir}/Siamese_Baseline_2022-01-03_11-48-24/model-epoch_38-fold1.pth"
     elif args.model == "lstm":
         model = SiameseLSTM(output_dim=128, batch_size=args.batch_size,
@@ -171,7 +183,7 @@ def choose_model(args, hyperparams):
         # TODO: Implement this
         raise NotImplementedError("STGRU has not yet been implemented!")
     else:  # baseline single-visit
-        model = SiamNet(output_dim=256, cov_layers=args.include_cov, args=args, hyperparameters=hyperparams)
+        model = SiamNet(output_dim=args.output_dim, cov_layers=args.include_cov, args=args, hyperparameters=hyperparams)
         old_checkpoint = f"{results_dir}/Siamese_Baseline_2022-01-03_11-48-24/model-epoch_38-fold1.pth"
 
     # Load weights
@@ -206,7 +218,7 @@ def train(model, dm, fold=0, version_name=None):
     dm.fold = fold
     train_loader = dm.train_dataloader()
     val_loader = dm.val_dataloader()
-    test_loader = dm.test_dataloader()
+    # test_loader = dm.test_dataloader()
 
     csv_logger = FriendlyCSVLogger(f"{curr_results_dir}", name=f'fold{fold}', version=version_name)
     tensorboard_logger = TensorBoardLogger(f"{curr_results_dir}", name=f"fold{fold}", version=csv_logger.version)
@@ -214,7 +226,7 @@ def train(model, dm, fold=0, version_name=None):
 
     trainer = Trainer(default_root_dir=f"{curr_results_dir}fold{fold}/version_{csv_logger.version}",
                       gpus=1, num_sanity_val_steps=1,
-                      accumulate_grad_batches=None,
+                      # accumulate_grad_batches=None,
                       precision=16,
                       gradient_clip_val=1,
                       max_epochs=100,
@@ -262,7 +274,7 @@ def main():
               'shuffle': True,
               'num_workers': args.num_workers,
               'pin_memory': True,
-              'persistent_workers': True,
+              'persistent_workers': True if args.num_workers else False,
               }
 
     dm = KidneyDataModule(args, params)
