@@ -4,10 +4,17 @@
     <option name="SCOPE_TYPE" value="3" />
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="2e439ead-1cec-4da4-9021-fd0df7818330" name="Changes" comment="Converted new code to PyTorch Lightning. Code for baseline single-visit model and conv. pooling model are functional.">
+    <list default="true" id="2e439ead-1cec-4da4-9021-fd0df7818330" name="Changes" comment="All models are now compatible with PyTorch Lightning, and grid_search.py has been updated to account for new PL logging.">
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/grid_search.py" beforeDir="false" afterPath="$PROJECT_DIR$/grid_search.py" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/model_training_pl.py" beforeDir="false" afterPath="$PROJECT_DIR$/model_training_pl.py" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/models/baseline_pl.py" beforeDir="false" afterPath="$PROJECT_DIR$/models/baseline_pl.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/models/conv_pooling.py" beforeDir="false" afterPath="$PROJECT_DIR$/models/conv_pooling.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/models/lstm.py" beforeDir="false" afterPath="$PROJECT_DIR$/models/lstm.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/models/tsm.py" beforeDir="false" afterPath="$PROJECT_DIR$/models/tsm.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/models/tsm_blocks.py" beforeDir="false" afterPath="$PROJECT_DIR$/models/tsm_blocks.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/utilities/data_visualizer.py" beforeDir="false" afterPath="$PROJECT_DIR$/utilities/data_visualizer.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/utilities/dataset_prep.py" beforeDir="false" afterPath="$PROJECT_DIR$/utilities/dataset_prep.py" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -77,7 +84,7 @@
       <recent name="C:\Users\Stanley Hua\projects\temporal_hydronephrosis" />
     </key>
   </component>
-  <component name="RunManager" selected="Python.model_training_pl">
+  <component name="RunManager" selected="Python.data_visualizer">
     <configuration default="true" type="PythonConfigurationType" factoryName="Python">
       <module name="temporal_hydronephrosis" />
       <option name="INTERPRETER_OPTIONS" value="" />
@@ -103,6 +110,9 @@
       <module name="temporal_hydronephrosis" />
       <option name="INTERPRETER_OPTIONS" value="" />
       <option name="PARENT_ENVS" value="true" />
+      <envs>
+        <env name="PYTHONUNBUFFERED" value="1" />
+      </envs>
       <option name="SDK_HOME" value="C:\Users\Stanley Hua\Anaconda3\envs\DL\python.exe" />
       <option name="WORKING_DIRECTORY" value="$PROJECT_DIR$/.." />
       <option name="IS_MODULE_SDK" value="true" />
@@ -117,7 +127,7 @@
       <option name="INPUT_FILE" value="" />
       <method v="2" />
     </configuration>
-    <configuration name="dataset_prep" type="PythonConfigurationType" factoryName="Python" temporary="true" nameIsGenerated="true">
+    <configuration name="data_visualizer" type="PythonConfigurationType" factoryName="Python" temporary="true" nameIsGenerated="true">
       <module name="temporal_hydronephrosis" />
       <option name="INTERPRETER_OPTIONS" value="" />
       <option name="PARENT_ENVS" value="true" />
@@ -126,7 +136,46 @@
       <option name="IS_MODULE_SDK" value="true" />
       <option name="ADD_CONTENT_ROOTS" value="true" />
       <option name="ADD_SOURCE_ROOTS" value="true" />
+      <option name="SCRIPT_NAME" value="$PROJECT_DIR$/utilities/data_visualizer.py" />
+      <option name="PARAMETERS" value="" />
+      <option name="SHOW_COMMAND_LINE" value="true" />
+      <option name="EMULATE_TERMINAL" value="false" />
+      <option name="MODULE_MODE" value="false" />
+      <option name="REDIRECT_INPUT" value="false" />
+      <option name="INPUT_FILE" value="" />
+      <method v="2" />
+    </configuration>
+    <configuration name="dataset_prep" type="PythonConfigurationType" factoryName="Python" temporary="true" nameIsGenerated="true">
+      <module name="temporal_hydronephrosis" />
+      <option name="INTERPRETER_OPTIONS" value="" />
+      <option name="PARENT_ENVS" value="true" />
+      <envs>
+        <env name="PYTHONUNBUFFERED" value="1" />
+      </envs>
+      <option name="SDK_HOME" value="C:\Users\Stanley Hua\Anaconda3\envs\DL\python.exe" />
+      <option name="WORKING_DIRECTORY" value="$PROJECT_DIR$/.." />
+      <option name="IS_MODULE_SDK" value="true" />
+      <option name="ADD_CONTENT_ROOTS" value="true" />
+      <option name="ADD_SOURCE_ROOTS" value="true" />
       <option name="SCRIPT_NAME" value="$PROJECT_DIR$/utilities/dataset_prep.py" />
+      <option name="PARAMETERS" value="" />
+      <option name="SHOW_COMMAND_LINE" value="true" />
+      <option name="EMULATE_TERMINAL" value="false" />
+      <option name="MODULE_MODE" value="false" />
+      <option name="REDIRECT_INPUT" value="false" />
+      <option name="INPUT_FILE" value="" />
+      <method v="2" />
+    </configuration>
+    <configuration name="grid_search" type="PythonConfigurationType" factoryName="Python" temporary="true" nameIsGenerated="true">
+      <module name="temporal_hydronephrosis" />
+      <option name="INTERPRETER_OPTIONS" value="" />
+      <option name="PARENT_ENVS" value="true" />
+      <option name="SDK_HOME" value="C:\Users\Stanley Hua\Anaconda3\envs\DL\python.exe" />
+      <option name="WORKING_DIRECTORY" value="$PROJECT_DIR$/.." />
+      <option name="IS_MODULE_SDK" value="true" />
+      <option name="ADD_CONTENT_ROOTS" value="true" />
+      <option name="ADD_SOURCE_ROOTS" value="true" />
+      <option name="SCRIPT_NAME" value="$PROJECT_DIR$/grid_search.py" />
       <option name="PARAMETERS" value="" />
       <option name="SHOW_COMMAND_LINE" value="true" />
       <option name="EMULATE_TERMINAL" value="false" />
@@ -181,6 +230,9 @@
       <module name="temporal_hydronephrosis" />
       <option name="INTERPRETER_OPTIONS" value="" />
       <option name="PARENT_ENVS" value="true" />
+      <envs>
+        <env name="PYTHONUNBUFFERED" value="1" />
+      </envs>
       <option name="SDK_HOME" value="" />
       <option name="WORKING_DIRECTORY" value="$PROJECT_DIR$/.." />
       <option name="IS_MODULE_SDK" value="true" />
@@ -216,61 +268,22 @@
       <option name="INPUT_FILE" value="" />
       <method v="2" />
     </configuration>
-    <configuration name="train_resnet-vgg_lstm" type="PythonConfigurationType" factoryName="Python" temporary="true" nameIsGenerated="true">
-      <module name="nephronetwork" />
-      <option name="INTERPRETER_OPTIONS" value="" />
-      <option name="PARENT_ENVS" value="true" />
-      <envs>
-        <env name="PYTHONUNBUFFERED" value="1" />
-      </envs>
-      <option name="SDK_HOME" value="C:\Users\Stanley Hua\Anaconda3\envs\DL\python.exe" />
-      <option name="WORKING_DIRECTORY" value="$PROJECT_DIR$/.." />
-      <option name="IS_MODULE_SDK" value="true" />
-      <option name="ADD_CONTENT_ROOTS" value="true" />
-      <option name="ADD_SOURCE_ROOTS" value="true" />
-      <option name="SCRIPT_NAME" value="$PROJECT_DIR$/../nephronetwork/1.Models/siamese_network/train_resnet-vgg_lstm.py" />
-      <option name="PARAMETERS" value="" />
-      <option name="SHOW_COMMAND_LINE" value="true" />
-      <option name="EMULATE_TERMINAL" value="false" />
-      <option name="MODULE_MODE" value="false" />
-      <option name="REDIRECT_INPUT" value="false" />
-      <option name="INPUT_FILE" value="" />
-      <method v="2" />
-    </configuration>
-    <configuration name="train_siamese_network_CV_v3_STStanUITest_diffsource" type="PythonConfigurationType" factoryName="Python" temporary="true" nameIsGenerated="true">
-      <module name="nephronetwork" />
-      <option name="INTERPRETER_OPTIONS" value="" />
-      <option name="PARENT_ENVS" value="true" />
-      <option name="SDK_HOME" value="C:\Users\Stanley Hua\Anaconda3\envs\DL\python.exe" />
-      <option name="WORKING_DIRECTORY" value="$PROJECT_DIR$/.." />
-      <option name="IS_MODULE_SDK" value="true" />
-      <option name="ADD_CONTENT_ROOTS" value="true" />
-      <option name="ADD_SOURCE_ROOTS" value="true" />
-      <option name="SCRIPT_NAME" value="$PROJECT_DIR$/../nephronetwork/1.Models/siamese_network/train_siamese_network_CV_v3_STStanUITest_diffsource.py" />
-      <option name="PARAMETERS" value="" />
-      <option name="SHOW_COMMAND_LINE" value="true" />
-      <option name="EMULATE_TERMINAL" value="false" />
-      <option name="MODULE_MODE" value="false" />
-      <option name="REDIRECT_INPUT" value="false" />
-      <option name="INPUT_FILE" value="" />
-      <method v="2" />
-    </configuration>
     <list>
       <item itemvalue="Python.temporal_hydronephrosis" />
       <item itemvalue="Python.model_training" />
-      <item itemvalue="Python.train_resnet-vgg_lstm" />
       <item itemvalue="Python.model_training_pl" />
-      <item itemvalue="Python.train_siamese_network_CV_v3_STStanUITest_diffsource" />
       <item itemvalue="Python.baseline_pl" />
       <item itemvalue="Python.dataset_prep" />
+      <item itemvalue="Python.grid_search" />
+      <item itemvalue="Python.data_visualizer" />
     </list>
     <recent_temporary>
       <list>
+        <item itemvalue="Python.data_visualizer" />
+        <item itemvalue="Python.grid_search" />
         <item itemvalue="Python.model_training_pl" />
         <item itemvalue="Python.dataset_prep" />
         <item itemvalue="Python.baseline_pl" />
-        <item itemvalue="Python.train_siamese_network_CV_v3_STStanUITest_diffsource" />
-        <item itemvalue="Python.train_resnet-vgg_lstm" />
       </list>
     </recent_temporary>
   </component>
@@ -353,7 +366,14 @@
       <option name="project" value="LOCAL" />
       <updated>1641875013008</updated>
     </task>
-    <option name="localTasksCounter" value="11" />
+    <task id="LOCAL-00011" summary="Updated torchmetrics to be accumulated on each step, then calculated at the end of the epoch. Added accumulate_grad_batches for non single-visit models.">
+      <created>1641879763530</created>
+      <option name="number" value="00011" />
+      <option name="presentableId" value="LOCAL-00011" />
+      <option name="project" value="LOCAL" />
+      <updated>1641879763530</updated>
+    </task>
+    <option name="localTasksCounter" value="12" />
     <servers />
   </component>
   <component name="Vcs.Log.Tabs.Properties">
@@ -391,6 +411,8 @@
     <MESSAGE value="Converting existing code to PyTorch Lightning in (model_training_pl.py, dataset_prep.py, baseline_pl.py)" />
     <MESSAGE value="Add custom logger to PyTorch lightning training." />
     <MESSAGE value="Converted new code to PyTorch Lightning. Code for baseline single-visit model and conv. pooling model are functional." />
-    <option name="LAST_COMMIT_MESSAGE" value="Converted new code to PyTorch Lightning. Code for baseline single-visit model and conv. pooling model are functional." />
+    <MESSAGE value="Updated torchmetrics to be accumulated on each step, then calculated at the end of the epoch. Added accumulate_grad_batches for non single-visit models." />
+    <MESSAGE value="All models are now compatible with PyTorch Lightning, and grid_search.py has been updated to account for new PL logging." />
+    <option name="LAST_COMMIT_MESSAGE" value="All models are now compatible with PyTorch Lightning, and grid_search.py has been updated to account for new PL logging." />
   </component>
 </project>

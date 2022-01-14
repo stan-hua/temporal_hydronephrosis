@@ -10,22 +10,14 @@ import torchmetrics.functional
 
 # noinspection PyTypeChecker,PyUnboundLocalVariable
 class SiamNet(pl.LightningModule):
-    def __init__(self, classes=2, num_inputs=2, output_dim=128, cov_layers=False, dropout_rate=0.5,
-                 args=None, hyperparameters=None):
+    def __init__(self, model_hyperparams=None):
         super(SiamNet, self).__init__()
 
-        self.args = args
-
-        # Model-specific arguments
-        self.cov_layers = cov_layers
-        self.output_dim = output_dim
-        self.num_inputs = num_inputs
-        self.hyperparameters = hyperparameters
-
         # Save hyperparameters to checkpoint
-        self.save_hyperparameters()
+        self.save_hyperparameters(model_hyperparams)
 
-        self.loss = torch.nn.NLLLoss(weight=torch.tensor((0.13, 0.87)))      # weight=torch.tensor((0.12, 0.88)
+        # Define loss and metrics
+        self.loss = torch.nn.NLLLoss(weight=torch.tensor((1 - self.hparams.weighted_loss, self.hparams.weighted_loss)))  # weight=torch.tensor((0.12, 0.88)
 
         self.train_acc = torchmetrics.Accuracy()
         self.train_auroc = torchmetrics.AUROC(num_classes=1, average="micro")
@@ -85,30 +77,30 @@ class SiamNet(pl.LightningModule):
         self.fc8 = nn.Sequential()
         self.fc8.add_module('fc8', nn.Linear(256 * 3 * 3, 512))
         self.fc8.add_module('relu8', nn.ReLU(inplace=True))
-        self.fc8.add_module('drop8', nn.Dropout(p=dropout_rate))
+        self.fc8.add_module('drop8', nn.Dropout(p=self.hparams.dropout_rate))
 
         self.fc9 = nn.Sequential()
-        self.fc9.add_module('fc9', nn.Linear(self.num_inputs * 512, self.output_dim))
+        self.fc9.add_module('fc9', nn.Linear(2 * 512, self.hparams.output_dim))
         self.fc9.add_module('relu9', nn.ReLU(inplace=True))
-        self.fc9.add_module('drop9', nn.Dropout(p=dropout_rate))
+        self.fc9.add_module('drop9', nn.Dropout(p=self.hparams.dropout_rate))
 
         # self.fc10 = nn.Sequential()
-        # self.fc10.add_module('fc10', nn.Linear(512, self.output_dim))
+        # self.fc10.add_module('fc10', nn.Linear(512, self.hparams.output_dim))
         # self.fc10.add_module('relu10', nn.ReLU(inplace=True))
         # self.fc10.add_module('drop10', nn.Dropout(p=dropout_rate))
 
         self.fc10 = nn.Sequential()
-        self.fc10.add_module('fc10', nn.Linear(self.output_dim, classes))
+        self.fc10.add_module('fc10', nn.Linear(self.hparams.output_dim, 2))
 
-        if self.cov_layers:
+        if self.hparams.include_cov:
             self.fc10.add_module('relu10', nn.ReLU(inplace=True))
 
             self.fc10b = nn.Sequential()
-            self.fc10b.add_module('fc10b', nn.Linear(classes + 2, self.output_dim))
+            self.fc10b.add_module('fc10b', nn.Linear(4, self.hparams.output_dim))
             self.fc10b.add_module('relu10b', nn.ReLU(inplace=True))
 
             self.fc10c = nn.Sequential()
-            self.fc10c.add_module('fc10c', nn.Linear(self.output_dim, classes))
+            self.fc10c.add_module('fc10c', nn.Linear(self.hparams.output_dim, 2))
 
     def load(self, checkpoint):
         model_dict = self.state_dict()
@@ -125,22 +117,21 @@ class SiamNet(pl.LightningModule):
         torch.save(self.state_dict(), checkpoint)
 
     def configure_optimizers(self):
-        if self.args.adam:
-            optimizer = torch.optim.Adam(self.parameters(), lr=self.hyperparameters['lr'],
-                                         weight_decay=self.hyperparameters['weight_decay'])
+        if self.hparams.adam:
+            optimizer = torch.optim.Adam(self.parameters(), lr=self.hparams.lr, weight_decay=self.hparams.weight_decay)
         else:
-            optimizer = torch.optim.SGD(self.parameters(), lr=self.hyperparameters['lr'],
-                                        momentum=self.hyperparameters['momentum'],
-                                        weight_decay=self.hyperparameters['weight_decay'])
+            optimizer = torch.optim.SGD(self.parameters(), lr=self.hparams.lr, momentum=self.hparams.momentum,
+                                        weight_decay=self.hparams.weight_decay)
         return optimizer
 
     def forward(self, data):
+        """Images in batch input is of the form (B,V,H,W) where V=view (sagittal, transverse)"""
         x = data['img']
 
-        B, T, C, H = x.size()
+        B, V, H, W = x.size()
         x = x.transpose(0, 1)
         x_list = []
-        for i in range(self.num_inputs):
+        for i in range(2):  # extract features for each US plane (sag, trv)
             z = torch.unsqueeze(x[i], 1)
             z = z.expand(-1, 3, -1, -1)
             z = self.conv1(z)
@@ -160,7 +151,7 @@ class SiamNet(pl.LightningModule):
         x = self.fc9(x)
         x = self.fc10(x)
 
-        if self.cov_layers:
+        if self.hparams.include_cov:
             age = data['Age_wks'].view(B, 1)
             side = data['Side_L'].view(B, 1)
 
@@ -177,7 +168,7 @@ class SiamNet(pl.LightningModule):
         B, T, C, H = x.size()
         x = x.transpose(0, 1)
         x_list = []
-        for i in range(self.num_inputs):
+        for i in range(2):
             z = torch.unsqueeze(x[i], 1)
             z = z.expand(-1, 3, -1, -1)
             z = self.conv1(z)
@@ -195,7 +186,7 @@ class SiamNet(pl.LightningModule):
         x = torch.cat(x_list, 1)
         x = x.view(B, -1)
 
-        if not self.cov_layers:
+        if not self.hparams.include_cov:
             return x.cpu().detach().numpy()
         else:
             x = self.fc9(x)

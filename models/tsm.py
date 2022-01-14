@@ -5,64 +5,59 @@ import numpy as np
 import torch
 from torch import nn
 
-from models.baseline import SiamNet
+from models.baseline_pl import SiamNet
 from models.tsm_blocks import *
 
 
 # noinspection PyTypeChecker,PyUnboundLocalVariable
 class SiamNetTSM(SiamNet):
-    def __init__(self, classes=2, num_inputs=2, output_dim=128, cov_layers=False, device=None, dropout_rate=0.5):
-        super().__init__(classes, num_inputs, output_dim, cov_layers, device, dropout_rate)
+    def __init__(self, model_hyperparams):
+        super().__init__(model_hyperparams)
 
-        self.conv.conv2_s1 = TemporalShift(self.conv.conv2_s1)
-        self.conv.conv3_s1 = TemporalShift(self.conv.conv3_s1)
-        self.conv.conv4_s1 = TemporalShift(self.conv.conv4_s1)
-        self.conv.conv5_s1 = TemporalShift(self.conv.conv5_s1)
-        self.fc6.fc6_s1 = TemporalShift(self.fc6.fc6_s1)
-        self.fc6b.conv6b_s1 = TemporalShift(self.fc6b.conv6b_s1)
+        self.conv2.conv2_s1 = TemporalShift(self.conv2.conv2_s1, inplace=True)
+        self.conv3.conv3_s1 = TemporalShift(self.conv3.conv3_s1)
+        self.conv4.conv4_s1 = TemporalShift(self.conv4.conv4_s1)
+        self.conv5.conv5_s1 = TemporalShift(self.conv5.conv5_s1)
+        self.conv6.conv6_s1 = TemporalShift(self.conv6.conv6_s1)
+        self.conv7.conv7_s1 = TemporalShift(self.conv7.conv7_s1)
 
-    def forward(self, x_t):
-        """Accepts sequence of dual view images. Predicts label at each time step.
+    def forward(self, data):
+        """Images in batch input is of the form (B,V,H,W) where V=view (sagittal, transverse)"""
 
-        ==Precondition==:
-            - batch size is 1
-            - without covariates and length, x_t shape is (1, time, dual_view, height, width)
-        """
-        if self.cov_layers:
-            data, in_dict = data
-            x_t, x_lengths = data
-            x_t = x_t, in_dict
-        else:
-            x_t, x_lengths = data
+        print(data['img'].size())
 
-        x = torch.squeeze(x_t, 0)
-        T, C, H, W = x.size()
+        x = data['img'][0]
+
+        B, V, H, W = x.size()
         x = x.transpose(0, 1)
         x_list = []
-        for i in range(self.num_inputs):
-            curr_x = torch.unsqueeze(x[i], 1)
-            curr_x = curr_x.expand(-1, 3, -1, -1)
-            z = self.conv(curr_x)
-            z = self.fc6(z)
-            z = self.fc6b(z)
-            z = z.view([T, 1, -1])
-            z = self.fc6c(z)
-            z = z.view([T, 1, -1])
+        for i in range(2):  # extract features for each US plane (sag, trv)
+            z = torch.unsqueeze(x[i], 1)
+            z = z.expand(-1, 3, -1, -1)
+            z = self.conv1(z)
+            print(z.size())
+            z = self.conv2(z)
+            z = self.conv3(z)
+            z = self.conv4(z)
+            z = self.conv5(z)
+            z = self.conv6(z)
+            z = self.conv7(z)
+            z = z.view([B, 1, -1])
+            z = self.fc8(z)
+            z = z.view([B, 1, -1])
             x_list.append(z)
 
         x = torch.cat(x_list, 1)
-        x = x.view(T, -1)
+        x = x.view(B, -1)
+        x = self.fc9(x)
+        x = self.fc10(x)
 
-        if self.cov_layers:
-            age = in_dict['Age_wks'].type(torch.FloatTensor).to(self.device, non_blocking=True).view(T, 1)
-            side = in_dict['Side_L'].type(torch.FloatTensor).to(self.device, non_blocking=True).view(T, 1)
+        if self.hparams.include_cov:
+            age = data['Age_wks'].view(B, 1)
+            side = data['Side_L'].view(B, 1)
 
-            age = age.expand(-1, 512)
-            side = side.expand(-1, 512)
             x = torch.cat((x, age, side), 1)
+            x = self.fc10b(x)
+            x = self.fc10c(x)
 
-        x = self.fc7_new(x)
-        x = self.fc8(x)
-        pred = self.classifier_new(x)
-
-        return pred
+        return torch.log_softmax(x, dim=1)

@@ -10,8 +10,8 @@ import seaborn as sns
 import numpy as np
 import pandas as pd
 
-from utilities.dataset_prep import prepare_data_into_sequences, parse_cov, recreate_train_test_split, \
-    make_validation_set, remove_invalid_samples
+from utilities.dataset_prep import load_dataset, get_data_dicts
+from model_training_pl import parseArgs, modifyArgs
 
 matplotlib.use("Qt5Agg")
 
@@ -123,6 +123,7 @@ class DataViewer:
 
     def plot_cov_distribution(self):
         """Plot distribution of covariates in training and testing set."""
+
         def _plot_cov(df):
             return sns.pairplot(df[["Num_visits", "y", "Age_wks"]])
 
@@ -141,6 +142,7 @@ class DataViewer:
 
     def plot_imaging_date_frequencies(self):
         """Plots histogram of imaging dates for positive & negative patients."""
+
         def _plot_frequencies(df, ax=None):
             ax1 = sns.histplot(data=df[df.y == 0], x="Imaging_Date", color="#55ACF8", bins=20, ax=ax, alpha=1)
             sns.histplot(data=df[df.y == 1], x="Imaging_Date", color="#F8A155", bins=20, ax=ax1, alpha=1)
@@ -161,40 +163,30 @@ class DataViewer:
 
 
 def load_data():
-    git_dir = "C:/Users/Stanley Hua/projects/"
-    sys.path.insert(0, git_dir + '/nephronetwork/0.Preprocess/')
-    sys.path.insert(0, git_dir + '/nephronetwork/1.Models/siamese_network/')
-    from load_dataset_LE import load_dataset
+    args = parseArgs()
+    modifyArgs(args)
+    args.include_validation = False
 
-    # Load data
-    X_train_, y_train_, cov_train_, X_test_, y_test_, cov_test_ = load_dataset(
-        views_to_get="siamese",
-        sort_by_date=True,
-        pickle_file=git_dir + "nephronetwork/0.Preprocess/preprocessed_images_20190617.pickle",
-        contrast=1,
-        split=0.7,
-        get_cov=True,
-        bottom_cut=0,
-        etiology="B",
-        crop=0,
-        git_dir=git_dir
-    )
+    train_dict, test_dict = load_dataset(args.json_infile, test_prop=0.2, ordered_split=args.ordered_split,
+                                         train_only=args.train_only,
+                                         data_dir=args.data_dir)
 
-    if isinstance(cov_train_, list) and isinstance(cov_test_, list):
-        func_parse_cov = partial(parse_cov, age=True, side=True, sex=False)
-        cov_train_ = list(map(func_parse_cov, cov_train_))
-        cov_test_ = list(map(func_parse_cov, cov_test_))
+    train_img_dict, train_label_dict, train_cov_dict, train_study_ids = get_data_dicts(train_dict,
+                                                                                       data_dir=args.data_dir,
+                                                                                       seq=not args.single_visit)
+    test_img_dict, test_label_dict, test_cov_dict, test_study_ids = get_data_dicts(test_dict,
+                                                                                   data_dir=args.data_dir,
+                                                                                   seq=not args.single_visit,
+                                                                                   last_visit_only=args.single_visit)
 
-    # Remove samples without proper covariates
-    X_train_, y_train_, cov_train_ = remove_invalid_samples(X_train_, y_train_, cov_train_)
-    X_test_, y_test_, cov_test_ = remove_invalid_samples(X_test_, y_test_, cov_test_)
-
-    return X_train_, y_train_, cov_train_, X_test_, y_test_, cov_test_
+    train_set = train_img_dict, train_label_dict, train_cov_dict, train_study_ids
+    test_set = test_img_dict, test_label_dict, test_cov_dict, test_study_ids
+    return train_set, test_set
 
 
 def describe_data(train_set, val_set):
-    X_train_, y_train_, cov_train_ = train_set
-    X_val_, y_val_, cov_val_ = val_set
+    train_img_dict, train_label_dict, train_cov_dict, train_study_ids = train_set
+    val_img_dict, val_label_dict, val_cov_dict, val_study_ids = val_set
 
     data_viewer = DataViewer(X_train_, y_train_, cov_train_,
                              X_val_, y_val_, cov_val_)
@@ -204,26 +196,47 @@ def describe_data(train_set, val_set):
     # data_viewer.plot_imaging_date_frequencies()
 
 
+def process_cov_dict(cov_dict):
+    df = pd.DataFrame(cov_dict).T.reset_index()
+    df['ID'] = df['index'].map(lambda x: x.split('_')[0])
+    df['Side_L'] = df['index'].map(lambda x: x.split('_')[1])
+    df['ID_Side'] = df['index'].map(lambda x: '_'.join(x.split('_')[:2]))
+
+    return df
+
+
+def get_examples_info(df_cov, label_dict):
+    def _extract_info_per_patient(df_):
+        """Get the age range (max - min) of patient across all their visits, and get their number of visits"""
+        age_range = max(df_["Age_wks"]) - min(df_['Age_wks'])
+        num_visits = len(df_)
+        id_ = df_['ID'].iloc[0]
+        side = df_['Side_L'].iloc[0]
+
+        row = pd.DataFrame({'age_range': age_range,
+                            'num_visits': num_visits,
+                            'ID': id_,
+                            'side': side}, index=[0])
+        return row
+
+    df_examples = df_cov.groupby(by=['ID_Side']).apply(lambda df_: _extract_info_per_patient(df_))
+    df_examples = df_examples.reset_index()
+    df_examples.drop(columns=['level_1'], inplace=True)
+
+    id_side_to_target = {"_".join(u.split("_")[:-1]): v for u, v in label_dict.items()}
+
+    df_examples['surgery'] = df_examples['ID_Side'].map(lambda x: id_side_to_target[x])
+
+
 if __name__ == "__main__":
-    X_train_, y_train_, cov_train_, X_test_, y_test_, cov_test_ = load_data()
-
-    X_train_, y_train_, cov_train_, X_test_, y_test_, cov_test_ = recreate_train_test_split(X_train_, y_train_,
-                                                                                            cov_train_,
-                                                                                            X_test_, y_test_, cov_test_)
-
-    X_train_, y_train_, cov_train_, X_test_, y_test_, cov_test_ = prepare_data_into_sequences(X_train_, y_train_,
-                                                                                              cov_train_,
-                                                                                              X_test_, y_test_,
-                                                                                              cov_test_,
-                                                                                              single_visit=True,
-                                                                                              single_target=False)
+    train_set, test_set = load_data()
 
     # describe_data((X_train_, y_train_, cov_train_), (X_test_, y_test_, cov_test_))
 
-    train_val_generator = make_validation_set(X_train_, y_train_, cov_train_, cv=True, num_folds=5)
-    i = 1
-    for train_val_fold in train_val_generator:  # only iterates once if not cross-fold validation
-        print(f"Fold {i}/{5}")
-        X_train, y_train, cov_train, X_val, y_val, cov_val = train_val_fold
-        describe_data((X_train, y_train, cov_train), (X_val, y_val, cov_val))
-        i += 1
+    # train_val_generator = make_validation_set(X_train_, y_train_, cov_train_, cv=True, num_folds=5)
+    # i = 1
+    # for train_val_fold in train_val_generator:  # only iterates once if not cross-fold validation
+    #     print(f"Fold {i}/{5}")
+    #     X_train, y_train, cov_train, X_val, y_val, cov_val = train_val_fold
+    #     describe_data((X_train, y_train, cov_train), (X_val, y_val, cov_val))
+    #     i += 1

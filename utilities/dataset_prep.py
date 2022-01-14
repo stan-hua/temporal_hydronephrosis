@@ -24,7 +24,10 @@ class KidneyDataModule(pl.LightningDataModule):
     def __init__(self, args, dataloader_params=None):
         super().__init__()
         self.args = args
-        self.dataloader_params = dataloader_params
+        self.train_dataloader_params = dataloader_params
+        self.val_dataloader_params = dataloader_params.copy()
+        self.val_dataloader_params['shuffle'] = False
+
         self.SEED = 42
 
         self.fold = 0  # indexer for cross-fold validation
@@ -92,7 +95,7 @@ class KidneyDataModule(pl.LightningDataModule):
 
         train_dicts = train_imgs_dict, train_labels_dict, train_cov_dict, train_ids
         training_set = KidneyDataset(train_dicts, include_cov=self.args.include_cov)
-        training_generator = DataLoader(training_set, **self.dataloader_params)
+        training_generator = DataLoader(training_set, **self.train_dataloader_params)
         return training_generator
 
     def val_dataloader(self):
@@ -108,23 +111,23 @@ class KidneyDataModule(pl.LightningDataModule):
         val_dicts = val_imgs_dict, val_labels_dict, val_cov_dict, val_ids
 
         val_set = KidneyDataset(data_dicts=val_dicts, include_cov=self.args.include_cov)
-        val_generator = DataLoader(val_set, **self.dataloader_params)
+        val_generator = DataLoader(val_set, **self.val_dataloader_params)
         return val_generator
 
     def test_dataloader(self):
-        test_generator = DataLoader(self.test_set, **self.dataloader_params)
+        test_generator = DataLoader(self.test_set, **self.val_dataloader_params)
         return test_generator
 
     def st_test_dataloader(self):
-        st_test_generator = DataLoader(self.st_test_set, **self.dataloader_params)
+        st_test_generator = DataLoader(self.st_test_set, **self.val_dataloader_params)
         return st_test_generator
 
     def stan_test_dataloader(self):
-        stan_test_generator = DataLoader(self.stan_test_set, **self.dataloader_params)
+        stan_test_generator = DataLoader(self.stan_test_set, **self.val_dataloader_params)
         return stan_test_generator
 
     def ui_test_dataloader(self):
-        ui_test_generator = DataLoader(self.ui_test_set, **self.dataloader_params)
+        ui_test_generator = DataLoader(self.ui_test_set, **self.val_dataloader_params)
         return ui_test_generator
 
 
@@ -139,14 +142,16 @@ class KidneyDataset(torch.utils.data.Dataset):
         img, y, cov = self.image_dict[id_], self.label_dict[id_], self.cov_dict[id_]
 
         id_split = id_.split("_")
-        data = {'img': torch.FloatTensor(img)}
+        data = {'img': torch.FloatTensor(img/255.)}
 
         if self.include_cov:
-            data['Side_L'] = torch.FloatTensor([1 if id_split[1] == 'Left' else 0])
-            data['Age_wks'] = torch.FloatTensor([cov['Age_wks']])
-            
-            if data['Age_wks'] is None or math.isnan(data['Age_wks']):
-                data['Age_wks'] = torch.FloatTensor([36])
+
+            if type(cov['Age_wks']) in [int, float, np.int32, np.float32, np.float64]:
+                age = [cov['Age_wks']]
+            else:
+                age = cov['Age_wks']
+            data['Age_wks'] = torch.FloatTensor(age)
+            data['Side_L'] = torch.FloatTensor([1 if id_split[1] == 'Left' else 0] * len(age))
 
         return data, y, id_
 

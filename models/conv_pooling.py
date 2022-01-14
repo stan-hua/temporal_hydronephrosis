@@ -23,7 +23,7 @@ class SiamNetConvPooling(SiamNet):
             x = x.transpose(0, 1)
 
             x_list = []
-            for i in range(self.num_inputs):
+            for i in range(2):
                 z = torch.unsqueeze(x[i], 1)
                 z = z.expand(-1, 3, -1, -1)
                 z = self.conv1(z)
@@ -41,21 +41,22 @@ class SiamNetConvPooling(SiamNet):
             x = torch.cat(x_list, 1)
             x = x.view(B, -1)
 
-            if self.cov_layers:
+            if self.hparams.include_cov:
                 x = self.fc9(x)
                 x = self.fc10(x)
 
-                age = data['Age_wks'].view(B, 1)
-                side = data['Side_L'].view(B, 1)
+                age = data['Age_wks'][:, t].view(1, 1)
+                side = data['Side_L'][:, t].view(1, 1)
 
                 x = torch.cat((x, age, side), 1)
                 x = self.fc10b(x)
 
             t_embeddings.append(x)
 
-        x, _ = torch.max(torch.stack(t_embeddings), dim=0)
+        x = torch.stack(t_embeddings)
+        x, _ = torch.max(x, dim=0)
 
-        if not self.cov_layers:
+        if not self.hparams.include_cov:
             x = self.fc9(x)
             x = self.fc10(x)
         else:
@@ -74,7 +75,7 @@ class SiamNetConvPooling(SiamNet):
             x = x.transpose(0, 1)
 
             x_list = []
-            for i in range(self.num_inputs):
+            for i in range(2):
                 z = torch.unsqueeze(x[i], 1)
                 z = z.expand(-1, 3, -1, -1)
                 z = self.conv1(z)
@@ -92,7 +93,7 @@ class SiamNetConvPooling(SiamNet):
             x = torch.cat(x_list, 1)
             x = x.view(B, -1)
 
-            if self.cov_layers:
+            if self.hparams.include_cov:
                 x = self.fc9(x)
                 x = self.fc10(x)
 

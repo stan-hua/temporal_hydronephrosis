@@ -7,12 +7,17 @@ from datetime import datetime
 import numpy as np
 import torch
 from pytorch_lightning import Trainer
-from pytorch_lightning.loggers import TensorBoardLogger
 from pytorch_lightning.callbacks.model_checkpoint import ModelCheckpoint
+from pytorch_lightning.loggers import TensorBoardLogger
+from ray import tune
+from ray.tune.integration.pytorch_lightning import TuneReportCallback
+from ray.tune import CLIReporter
+from ray.tune.schedulers import ASHAScheduler, PopulationBasedTraining
 
 from models.baseline_pl import SiamNet
 from models.conv_pooling import SiamNetConvPooling
 from models.lstm import SiameseLSTM
+from models.tsm import SiamNetTSM
 from utilities.custom_logger import FriendlyCSVLogger
 from utilities.dataset_prep import KidneyDataModule
 
@@ -74,13 +79,16 @@ def parseArgs():
     parser.add_argument("--include_cov", action="store_true",
                         help="Include covariates (age at ultrasound and kidney side (R/L)) in model.")
     parser.add_argument("--accum_grad_batches", default=None, help="Number of batches to accumulate gradient.")
+    parser.add_argument("--dropout_rate", default=0.5, type=float,
+                        help="Dropout rate to apply on last linear layers during training.")
+    parser.add_argument("--weighted_loss", default=0.5, type=float, help="Weight to assign to positive class in calculating loss.")
 
     parser.add_argument("--num_workers", default=1, type=int, help="Number of CPU workers")
     parser.add_argument("--split", default=0.7, type=float, help="proportion of dataset to use as training")
     parser.add_argument('--ordered_split', action="store_true", default=False, help="Use Adam optimizer instead of SGD")
     parser.add_argument("--bottom_cut", default=0.0, type=float, help="proportion of dataset to cut from bottom")
     parser.add_argument('--cv', action='store_true', help="Flag to run cross validation")
-    parser.add_argument("--stop_epoch", default=100, type=int,
+    parser.add_argument("--stop_epoch", default=40, type=int,
                         help="If not running cross validation, which epoch to finish with")
     parser.add_argument("--save_frequency", default=100, type=int, help="Save model weights every <x> epochs")
     parser.add_argument("--train_only", action="store_true", help="Only fit train/val")
@@ -99,15 +107,17 @@ def modifyArgs(args):
     global model_name
 
     # Model hyperparameters
-    args.lr = 0.0001
-    args.batch_size = 128
-    args.adam = False
-    args.momentum = 0.8
-    args.weight_decay = 0.0005
+    # args.lr = 0.001
+    # args.batch_size = 1
+    # args.adam = False
+    # args.momentum = 0.8
+    # args.weight_decay = 0.0005
+    # args.weighted_loss = 0.5
+    # args.dropout_rate = 0
+    # args.include_cov = True
 
-    args.early_stopping_patience = 100
-    args.save_frequency = 1000  # Save weights every x epochs
-    args.include_cov = True
+    # args.early_stopping_patience = 100
+    # args.save_frequency = 1000  # Save weights every x epochs
     args.load_hyperparameters = False
     args.pretrained = False
 
@@ -126,9 +136,9 @@ def modifyArgs(args):
 
     # Data parameters
     if args.model == model_types[0]:  # for single-visit models
-        args.standardize_seq_length, args.single_visit = False, True
+        args.single_visit = True
     else:  # for multiple-visit models
-        args.standardize_seq_length, args.single_visit = True, False
+        args.single_visit = False
         args.accum_grad_batches = args.batch_size
         args.batch_size = 1
 
@@ -168,24 +178,21 @@ def choose_model(args, hyperparams):
     old_checkpoint = ""
 
     if args.model == "conv_pool":
-        model = SiamNetConvPooling(output_dim=args.output_dim, cov_layers=args.include_cov,
-                                   args=args, hyperparameters=hyperparams)
+        model = SiamNetConvPooling(model_hyperparams=hyperparams)
         old_checkpoint = f"{results_dir}/Siamese_Baseline_2022-01-03_11-48-24/model-epoch_38-fold1.pth"
     elif args.model == "lstm":
-        model = SiameseLSTM(output_dim=128, batch_size=args.batch_size,
+        model = SiameseLSTM(hyperparams,
                             bidirectional=True,
                             hidden_dim=512,
                             n_lstm_layers=1,
-                            insert_where=0,
-                            device=device, cov_layers=args.include_cov)
+                            insert_where=None)
     elif args.model == "tsm":
-        # TODO: Implement this
-        raise NotImplementedError("TSM has not yet been implemented!")
+        model = SiamNetTSM(model_hyperparams=hyperparams)
     elif args.model == "stgru":
         # TODO: Implement this
         raise NotImplementedError("STGRU has not yet been implemented!")
     else:  # baseline single-visit
-        model = SiamNet(output_dim=args.output_dim, cov_layers=args.include_cov, args=args, hyperparameters=hyperparams)
+        model = SiamNet(model_hyperparams=hyperparams)
         old_checkpoint = f"{results_dir}/Siamese_Baseline_2022-01-03_11-48-24/model-epoch_38-fold1.pth"
 
     # Load weights
@@ -214,26 +221,40 @@ def update_paths(model_type):
 
 
 # Training
-def train(model, dm, args, fold=0, version_name=None):
+def train(config, args, dm, fold=0, checkpoint=True, tune=False, version_name=None):
     global best_hyperparameters_folder
 
+    print(f"Fold {fold}/{args.num_folds} Starting...")
+    model = choose_model(args, config)
+
+    # Loggers
+    csv_logger = FriendlyCSVLogger(f"{curr_results_dir}", name=f'fold{fold}', version=version_name)
+    tensorboard_logger = TensorBoardLogger(f"{curr_results_dir}", name=f"fold{fold}", version=csv_logger.version)
+
+    # Callbacks
+    callbacks = []
+    if checkpoint:
+        callbacks.append(ModelCheckpoint(dirpath=f"{curr_results_dir}fold{fold}/version_{csv_logger.version}/checkpoints",
+                                 monitor="val_loss"))
+    if tune:
+        callbacks.append(TuneReportCallback({'val_loss': 'val_loss'}, on='validation_end'))
+
+    # Get dataloaders
     dm.fold = fold
     train_loader = dm.train_dataloader()
     val_loader = dm.val_dataloader()
     # test_loader = dm.test_dataloader()
 
-    csv_logger = FriendlyCSVLogger(f"{curr_results_dir}", name=f'fold{fold}', version=version_name)
-    tensorboard_logger = TensorBoardLogger(f"{curr_results_dir}", name=f"fold{fold}", version=csv_logger.version)
-    checkpoint = ModelCheckpoint(dirpath=f"{curr_results_dir}fold{fold}/version_{csv_logger.version}/checkpoints")
-
     trainer = Trainer(default_root_dir=f"{curr_results_dir}fold{fold}/version_{csv_logger.version}",
-                      gpus=1, num_sanity_val_steps=1,
+                      gpus=1, num_sanity_val_steps=0,
+                      # log_every_n_steps=100,
                       accumulate_grad_batches=args.accum_grad_batches,
                       precision=16,
-                      gradient_clip_val=1,
-                      max_epochs=100,
+                      gradient_clip_val=1,      # TODO: Test effect of precision and grad clip val
+                      max_epochs=args.stop_epoch,
+                      enable_checkpointing=checkpoint,
                       # stochastic_weight_avg=True,
-                      callbacks=[checkpoint],
+                      callbacks=callbacks,
                       logger=[csv_logger, tensorboard_logger],
                       # fast_dev_run=True
                       )
@@ -242,7 +263,7 @@ def train(model, dm, args, fold=0, version_name=None):
     # trainer.test(test_dataloaders=test_loader)
 
 
-# Main Method
+# Main Methods
 def main():
     print(timestamp)
     args = parseArgs()
@@ -259,45 +280,80 @@ def main():
     torch.backends.cudnn.benchmark = True
 
     # Save/load in the best hyperparameters if available
-    hyperparams = {'lr': args.lr, "batch_size": args.batch_size,
-                   'adam': args.adam,
-                   'momentum': args.momentum,
-                   'weight_decay': args.weight_decay, 'train/test_split': args.split,
-                   'patience': args.early_stopping_patience,
-                   'num_epochs': args.epochs, 'stop_epoch': args.stop_epoch,
-                   'balance_classes': args.balance_classes,
-                   'include_cov': args.include_cov
-                   }
-    if args.load_hyperparameters:
-        load_hyperparameters(hyperparams, best_hyperparameters_folder)
-        # args.save_frequency = hyperparams['stop_epoch']
-        # args.stop_epoch = hyperparams['stop_epoch']
-    params = {'batch_size': hyperparams["batch_size"],
-              'shuffle': True,
-              'num_workers': args.num_workers,
-              'pin_memory': True,
-              'persistent_workers': True if args.num_workers else False,
-              }
+    args.tune_hyperparameters = False
+    if not args.tune_hyperparameters:
+        hyperparams = {'lr': args.lr, "batch_size": args.batch_size,
+                       'adam': args.adam,
+                       'momentum': args.momentum,
+                       'weight_decay': args.weight_decay,
+                       # 'patience': args.early_stopping_patience,
+                       # 'num_epochs': args.epochs, 'stop_epoch': args.stop_epoch,
+                       # 'balance_classes': args.balance_classes,
+                       'include_cov': args.include_cov,
+                       'output_dim': args.output_dim,
+                       'dropout_rate': args.dropout_rate,
+                       'weighted_loss': args.weighted_loss
+                       }
 
-    dm = KidneyDataModule(args, params)
-    dm.prepare_data()
-    dm.setup()
+        # hyperparams = {'lr': 0.105, 'batch_size': 1,
+        #                'adam': False,
+        #                'momentum': 0.9,
+        #                'weight_decay': 0.005,
+        #                'loss_weights': (0.5, 0.5),
+        #                'include_cov': True,
+        #                'output_dim': 512,
+        #                'dropout_rate': 0.25}
 
-    # try:
-    # Train model
-    for fold in range(5 if args.cv else 1):  # only iterates once if not cross-fold validation
-        print(f"Fold {i}/{args.num_folds} Starting...")
+        if args.load_hyperparameters:
+            load_hyperparameters(hyperparams, best_hyperparameters_folder)
+            # args.save_frequency = hyperparams['stop_epoch']
+            # args.stop_epoch = hyperparams['stop_epoch']
 
-        model = choose_model(args, hyperparams)
-        train(model, dm, args, fold=fold)
+        data_params = {'batch_size': hyperparams['batch_size'],
+                       'shuffle': True,
+                       'num_workers': args.num_workers,
+                       'pin_memory': True,
+                       'persistent_workers': True if args.num_workers else False, }
 
-        # if not args.test_only:
-        #     plot_loss(curr_results_dir)
+        dm = KidneyDataModule(args, data_params)
+        dm.prepare_data()
+        dm.setup()
 
-    # except Exception as e:
-    #     # If exception occurs, print stack trace and remove results directory.
-    #     print(e)
-    #     shutil.rmtree(curr_results_dir)
+        for fold in range(5 if args.cv else 1):
+            train(config=hyperparams, args=args, dm=dm, fold=fold, checkpoint=False)
+    else:
+        hyperparams = {'lr': tune.loguniform(1e-4, 1e-1), "batch_size": 128,
+                       'adam': True,
+                       'momentum': 0.9,
+                       'weight_decay': 5e-4,
+                       # 'patience': args.early_stopping_patience,
+                       # 'num_epochs': args.epochs, 'stop_epoch': args.stop_epoch,
+                       'loss_weights': (0.13, 0.87),
+                       'include_cov': True,
+                       'output_dim': 128,
+                       'dropout_rate': 0.5}
+
+        # scheduler = ASHAScheduler(max_t=100, grace_period=1, reduction_factor=2)
+        scheduler = PopulationBasedTraining(perturbation_interval=4,
+                                            hyperparam_mutations={'lr': tune.loguniform(1e-4, 1e-1),
+                                                                  "batch_size": [1, 64, 128],
+                                                                  'adam': [True, False],
+                                                                  'momentum': [0.8, 0.9],
+                                                                  'weight_decay': [5e-4, 5e-3],
+                                                                  'loss_weights': [(0.5, 0.5), (0.13, 0.87)],
+                                                                  'output_dim': [128, 256, 512],
+                                                                  'dropout_rate': [0, 0.25, 0.5]
+                                                                  })
+        reporter = CLIReporter(parameter_columns=list(hyperparams.keys()), metric_columns=['val_loss'])
+
+        train_fn_with_parameters = tune.with_parameters(train, args=args)
+
+        analysis = tune.run(train_fn_with_parameters, resources_per_trial={'cpu': args.num_workers, 'gpu': 1},
+                            metric="val_loss", mode='min', config=hyperparams, num_samples=10,
+                            progress_reporter=reporter, scheduler=scheduler,
+                            name='tune_baseline_pbt')
+
+        print("Best hyperparameters found were:", analysis.best_config)
 
 
 if __name__ == '__main__':

@@ -11,7 +11,7 @@ import torch.nn.functional as F
 
 
 class TemporalShift(nn.Module):
-    def __init__(self, net, n_segment=3, n_div=8, inplace=False):
+    def __init__(self, net, n_segment=4, n_div=8, inplace=False):
         super(TemporalShift, self).__init__()
         self.net = net
         self.n_segment = n_segment
