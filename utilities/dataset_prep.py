@@ -13,15 +13,17 @@ import numpy as np
 import pytorch_lightning as pl
 import torch
 from PIL import Image
+from kornia.augmentation import *
 from skimage import img_as_float, transform, exposure
 from skimage.transform import resize
-from sklearn.model_selection import StratifiedKFold
+from sklearn.model_selection import StratifiedKFold, StratifiedShuffleSplit
 from sklearn.utils import shuffle
 from torch.utils.data import DataLoader
 
 
+# Main data module
 class KidneyDataModule(pl.LightningDataModule):
-    def __init__(self, args, dataloader_params=None):
+    def __init__(self, args, dataloader_params, debug=True):
         super().__init__()
         self.args = args
         self.train_dataloader_params = dataloader_params
@@ -29,6 +31,9 @@ class KidneyDataModule(pl.LightningDataModule):
         self.val_dataloader_params['shuffle'] = False
 
         self.SEED = 42
+        self.debug = debug
+        if self.debug:  # if debugging, will save training and validation dictionaries to object
+            self.train_dicts, self.val_dicts = None, None
 
         self.fold = 0  # indexer for cross-fold validation
         self.train_img_dict, self.train_label_dict, self.train_cov_dict, self.train_study_ids = None, None, None, None
@@ -45,16 +50,24 @@ class KidneyDataModule(pl.LightningDataModule):
 
             train_img_dict, train_label_dict, train_cov_dict, train_study_ids = get_data_dicts(train_dict,
                                                                                                data_dir=args.data_dir,
-                                                                                               seq=not args.single_visit)
+                                                                                               seq=not args.single_visit,
+                                                                                               include_baseline_date=args.ordered_validation)
             # Prepare data into sequences
 
             # Split into train-validation sets
             if args.include_validation:
                 train_labels = list(train_label_dict.values())
-                train_val_ids_generator = make_validation_set(train_study_ids, train_labels,
-                                                              cv=args.cv, num_folds=args.num_folds)
+                if args.cv:
+                    train_val_ids_generator = make_cross_validation_sets(train_study_ids, train_labels,
+                                                                         num_folds=args.num_folds)
+                else:
+                    train_val_ids_generator = make_train_val_split(train_study_ids, train_labels, train_cov_dict,
+                                                                   ordered_split=args.ordered_validation)
             else:
-                train_val_ids_generator = [(train_study_ids, [])]
+                train_val_ids_generator = [(range(len(train_study_ids)), [])]
+
+            # Remove baseline date from covariates (if used to order train-val_split)
+            remove_bl_date(train_cov_dict)
 
             self._train_val_idx_generator = train_val_ids_generator
 
@@ -65,25 +78,21 @@ class KidneyDataModule(pl.LightningDataModule):
 
             # Test set
             if not args.train_only:
-                test_set = get_data_dicts(test_dict, data_dir=args.data_dir, seq=not args.single_visit,
-                                          last_visit_only=args.single_visit)
-                self.test_set = KidneyDataset(data_dicts=test_set, include_cov=self.args.include_cov)
+                self.test_set = get_data_dicts(test_dict, data_dir=args.data_dir, seq=not args.single_visit,
+                                               last_visit_only=args.single_visit)
 
         if stage == 'test_heldout':
             # Silent Trial
             st_test_dict = load_test_dataset(args.json_st_test, data_dir=args.data_dir)
-            st_test_set = get_data_dicts(st_test_dict, data_dir=args.data_dir, silent_trial=True)
-            self.st_test_set = KidneyDataset(data_dicts=st_test_set, include_cov=args.include_cov)
+            self.st_test_set = get_data_dicts(st_test_dict, data_dir=args.data_dir, silent_trial=True)
 
             # Stanford
             stan_test_dict = load_test_dataset(args.json_stan_test, data_dir=args.data_dir)
-            stan_test_set = get_data_dicts(stan_test_dict, data_dir=args.data_dir)
-            self.stan_test_set = KidneyDataset(data_dicts=stan_test_set, include_cov=args.include_cov)
+            self.stan_test_set = get_data_dicts(stan_test_dict, data_dir=args.data_dir)
 
             # UIowa
             ui_test_dict = load_test_dataset(args.json_ui_test, data_dir=args.data_dir)
-            ui_test_set = get_data_dicts(ui_test_dict, data_dir=args.data_dir)
-            self.ui_test_set = KidneyDataset(data_dicts=ui_test_set, include_cov=args.include_cov)
+            self.ui_test_set = get_data_dicts(ui_test_dict, data_dir=args.data_dir)
 
     def train_dataloader(self):
         train_idx, _ = self._train_val_idx_generator[self.fold]
@@ -94,6 +103,10 @@ class KidneyDataModule(pl.LightningDataModule):
         train_cov_dict = {train_id: self.train_cov_dict[train_id] for train_id in train_ids}
 
         train_dicts = train_imgs_dict, train_labels_dict, train_cov_dict, train_ids
+
+        if self.debug:
+            self.train_dicts = train_dicts
+
         training_set = KidneyDataset(train_dicts, include_cov=self.args.include_cov)
         training_generator = DataLoader(training_set, **self.train_dataloader_params)
         return training_generator
@@ -110,25 +123,65 @@ class KidneyDataModule(pl.LightningDataModule):
         val_cov_dict = {val_id: self.train_cov_dict[val_id] for val_id in val_ids}
         val_dicts = val_imgs_dict, val_labels_dict, val_cov_dict, val_ids
 
+        if self.debug:
+            self.val_dicts = val_dicts
+
         val_set = KidneyDataset(data_dicts=val_dicts, include_cov=self.args.include_cov)
         val_generator = DataLoader(val_set, **self.val_dataloader_params)
         return val_generator
 
     def test_dataloader(self):
-        test_generator = DataLoader(self.test_set, **self.val_dataloader_params)
+        test_set = KidneyDataset(data_dicts=self.test_set, include_cov=self.args.include_cov)
+        test_generator = DataLoader(test_set, **self.val_dataloader_params)
         return test_generator
 
     def st_test_dataloader(self):
-        st_test_generator = DataLoader(self.st_test_set, **self.val_dataloader_params)
+        st_test_set = KidneyDataset(data_dicts=self.st_test_set, include_cov=args.include_cov)
+        st_test_generator = DataLoader(st_test_set, **self.val_dataloader_params)
         return st_test_generator
 
     def stan_test_dataloader(self):
-        stan_test_generator = DataLoader(self.stan_test_set, **self.val_dataloader_params)
+        stan_test_set = KidneyDataset(data_dicts=self.stan_test_set, include_cov=args.include_cov)
+        stan_test_generator = DataLoader(stan_test_set, **self.val_dataloader_params)
         return stan_test_generator
 
     def ui_test_dataloader(self):
-        ui_test_generator = DataLoader(self.ui_test_set, **self.val_dataloader_params)
+        ui_test_set = KidneyDataset(data_dicts=self.ui_test_set, include_cov=args.include_cov)
+        ui_test_generator = DataLoader(ui_test_set, **self.val_dataloader_params)
         return ui_test_generator
+
+
+class DataAugmentation(torch.nn.Module):
+    """Module to perform batch data augmentation on torch tensors using Kornia."""
+
+    def __init__(self, normalize=False, random_rotation=False, color_jitter=False,
+                 random_gaussian_blur=False, random_motion_blur=False, random_noise=False,
+                 prob=0.) -> None:
+        super().__init__()
+        self.transforms = torch.nn.Sequential()
+
+        if normalize:
+            self.transforms.add(Normalize(mean=0.0, std=1.0, p=1.0))
+
+        if random_rotation:
+            self.transforms.add(RandomRotation((-0.15, 0.15), p=prob))
+
+        if color_jitter:
+            self.transforms.add(ColorJitter(brightness=[0.5, 2], contrast=[0.5, 2], p=prob))
+
+        if random_gaussian_blur:
+            self.transforms.add(RandomGaussianBlur((3, 3), (0.1, 2.0), p=prob))
+
+        if random_motion_blur:
+            self.transforms.add(RandomMotionBlur(3, 35., 0.5, p=prob))
+
+        if random_noise:
+            self.transforms.add(RandomGaussianNoise(p=prob))
+
+    @torch.no_grad()
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        x_augmented = self.transforms(x)
+        return x_augmented
 
 
 # ==DATA LOADING==:
@@ -142,7 +195,8 @@ class KidneyDataset(torch.utils.data.Dataset):
         img, y, cov = self.image_dict[id_], self.label_dict[id_], self.cov_dict[id_]
 
         id_split = id_.split("_")
-        data = {'img': torch.FloatTensor(img/255.)}
+        data = {'img': torch.FloatTensor(img)}
+        data['img'] = torch.div(data['img'], 255)
 
         if self.include_cov:
 
@@ -235,7 +289,8 @@ def load_test_dataset(json_infile, data_dir):
     return in_dict
 
 
-def get_data_dicts(in_dict, data_dir, update_num=None, silent_trial=False, last_visit_only=False, seq=False):
+def get_data_dicts(in_dict, data_dir, update_num=None, silent_trial=False, last_visit_only=False, seq=False,
+                   include_baseline_date=False):
     """Return tuple containing 3 dictionaries of images, labels, covariates and a list of study IDs.
 
     :param in_dict: Dictionary of nested dictionaries, where outermost keys correspond to patient IDs.
@@ -244,6 +299,7 @@ def get_data_dicts(in_dict, data_dir, update_num=None, silent_trial=False, last_
     :param update_num: Number to append to patient ID if transformation is applied
     :param last_visit_only: If true, only include the last ultrasound visit.
     :param seq: If true, returned dicts will contain sequences (lists) of images and covariates, corresponding to visits
+    :param include_baseline_date: If true, include baseline date for each patient.
     """
     img_dict = dict()
     label_dict = dict()
@@ -263,17 +319,43 @@ def get_data_dicts(in_dict, data_dir, update_num=None, silent_trial=False, last_
                     us_nums = sorted(us_nums)[-1]
 
                 for us_num in us_nums:
-                    if in_dict[study_id][side][us_num]['Age_wks'] in ["NA", None] or \
-                            not {'sag', 'trv'}.issubset(in_dict[study_id][side][us_num].keys()):
-                        continue
+                    try:
+                        if in_dict[study_id][side][us_num]['Age_wks'] in ["NA", None] or \
+                                not {'sag', 'trv'}.issubset(in_dict[study_id][side][us_num].keys()):
+                            continue
+                    except KeyError as e:
+                        print(study_id, side, us_num, 'Age_wks')
+                        print(us_nums)
+                        raise e
 
                     dict_key = study_id + "_" + side
                     dict_key += f"_{us_num}" if not seq else ""
                     dict_key += f"_{update_num}" if update_num is not None else ""
 
+                    # Get covariates
+                    machine = in_dict[study_id][side][us_num]['US_machine']
+                    sex = in_dict[study_id]['Sex']
+                    age_wks = in_dict[study_id][side][us_num]['Age_wks']
+                    bl_date = in_dict[study_id]['BL_date'] if include_baseline_date else None
+
+                    # Verify label and covariate age
+                    if surgery not in [0, 1]:
+                        print("Invalid surgery value! Will be skipped.")
+                        continue
+                    if age_wks < 0:
+                        print("Negative age value! Will be skipped.")
+                        continue
+                    elif age_wks > 52 * 10:
+                        print("Patient over the age of 10! Will be skipped.")
+                        continue
+
+                    # Initialize
                     if dict_key not in img_dict:
                         img_dict[dict_key] = dict() if not seq else list()
+                    if dict_key not in cov_dict:
+                        cov_dict[dict_key] = dict() if not seq else defaultdict(list)
 
+                    # Get images
                     if silent_trial:
                         sag_img = process_input_image(data_dir + in_dict[study_id][side][us_num]['sag'])
                         trv_img = process_input_image(data_dir + in_dict[study_id][side][us_num]['trv'])
@@ -281,17 +363,11 @@ def get_data_dicts(in_dict, data_dir, update_num=None, silent_trial=False, last_
                         sag_img = special_ST_preprocessing(data_dir + in_dict[study_id][side][us_num]['sag'])
                         trv_img = special_ST_preprocessing(data_dir + in_dict[study_id][side][us_num]['trv'])
 
+                    # Assign values
                     assign_images(img_dict, dict_key, sag_img, trv_img, split_view=False, seq=seq)
-
                     label_dict[dict_key] = surgery
+                    assign_covariates(cov_dict, dict_key, machine, sex, age_wks, seq=seq, bl_date=bl_date)
 
-                    if dict_key not in cov_dict:
-                        cov_dict[dict_key] = dict() if not seq else defaultdict(list)
-                    machine = in_dict[study_id][side][us_num]['US_machine']
-                    sex = in_dict[study_id]['Sex']
-                    age_wks = in_dict[study_id][side][us_num]['Age_wks']
-
-                    assign_covariates(cov_dict, dict_key, machine, sex, age_wks, seq=seq)
                     assert label_dict[dict_key] is not None
                     assert img_dict[dict_key] is not None
                     assert cov_dict[dict_key]['Sex'] is not None
@@ -300,24 +376,43 @@ def get_data_dicts(in_dict, data_dir, update_num=None, silent_trial=False, last_
             print(e)
         except AssertionError as f:
             print(f)
-            raise AssertionError
 
     ids = list(img_dict.keys())
     return img_dict, label_dict, cov_dict, ids
 
 
-def make_validation_set(train_study_ids, train_labels, cv=False, num_folds=5, train_val_split=0.2):
-    """Split training data into training and validation splits using IDs."""
-    if not cv:
-        raise NotImplementedError()
-        # X_train, X_val = split_data(X_train, train_val_split)
-        # y_train, y_val = split_data(y_train, train_val_split)
-        # cov_train, cov_val = split_data(cov_train, train_val_split)
-        # return [(X_train, y_train, cov_train, X_val, y_val, cov_val)]
+def make_cross_validation_sets(train_study_ids, train_labels, num_folds=5):
+    """Cross-fold validation. Split training data into training and validation splits using IDs. Return list containing
+    tuples of (train_ids, val_ids), where each tuple corresponds to <num_folds> splits."""
+    skf = StratifiedKFold(n_splits=num_folds, shuffle=True, random_state=42)
+    return list(skf.split(train_study_ids, train_labels))
+
+
+def make_train_val_split(train_study_ids, train_labels, train_cov_dict, split=0.8, ordered_split=True):
+    """Split training data into a training set and validation set."""
+    if ordered_split:
+        date = [train_cov_dict[id_]['BL_date'] for id_ in train_study_ids]
+        sorted_id_date = sorted(zip(train_study_ids, date), key=lambda x: x[1])
+        sorted_ids = list(zip(*sorted_id_date))[0]
+        end_idx = math.floor((len(sorted_ids) * split))
+
+        train_ids = sorted_ids[:end_idx]
+
+        train_idx = []
+        val_idx = []
+        for i in range(len(train_study_ids)):
+            if train_study_ids[i] in train_ids:
+                train_idx.append(i)
+            else:
+                val_idx.append(i)
+
+        shuffled_train_idx = shuffle(train_idx, random_state=42)
+        shuffled_val_idx = shuffle(val_idx, random_state=42)
+
+        return [(shuffled_train_idx, shuffled_val_idx)]
     else:
-        skf = StratifiedKFold(n_splits=num_folds, shuffle=True, random_state=42)
-        # Get training set and validation set IDs of the form ((train_idx, val_idx), (train_idx, val_idx), ...)
-        return list(skf.split(train_study_ids, train_labels))
+        sss = StratifiedShuffleSplit(n_splits=1, train_size=split, random_state=42)
+        return list(sss.split(X=train_study_ids, y=train_labels))
 
 
 # ==HELPER FUNCTIONS==:
@@ -350,7 +445,7 @@ def assign_images(img_dict: dict, dict_key: str, sag_img, trv_img, split_view=Fa
             img_dict[dict_key].append(np.stack([sag_img, trv_img]))
 
 
-def assign_covariates(cov_dict: dict, dict_key: str, machine: str, sex, age_wks, seq=False):
+def assign_covariates(cov_dict: dict, dict_key: str, machine: str, sex, age_wks, seq=False, bl_date=None):
     """Assign covariates to key in <cov_dict>, or append covariates to list at key in <cov_dict> if building a sequence.
     """
     if not seq:
@@ -360,6 +455,9 @@ def assign_covariates(cov_dict: dict, dict_key: str, machine: str, sex, age_wks,
         else:
             cov_dict[dict_key]['Sex'] = 1 if (sex == "M") else 2
         cov_dict[dict_key]['Age_wks'] = age_wks
+
+        if bl_date is not None:
+            cov_dict[dict_key]['BL_date'] = bl_date
     else:
         cov_dict[dict_key]['US_machine'].append(machine)
         if type(sex) == int:
@@ -367,11 +465,20 @@ def assign_covariates(cov_dict: dict, dict_key: str, machine: str, sex, age_wks,
         else:
             cov_dict[dict_key]['Sex'].append(1 if (sex == "M") else 2)
         cov_dict[dict_key]['Age_wks'].append(age_wks)
+        if bl_date is not None:
+            cov_dict[dict_key]['BL_date'] = bl_date
 
 
 def flatten(lst):
     # from https://stackoverflow.com/questions/2158395/flatten-an-irregular-list-of-lists
     return eval('[' + str(lst).replace('[', '').replace(']', '') + ']')
+
+
+def remove_bl_date(cov_dict):
+    """Remove baseline date from cov_dict in place, where each key in cov_dict is a patient ID."""
+    for u, v in cov_dict.items():
+        if 'BL_date' in v.keys():
+            v.pop('BL_date')
 
 
 # ==IMAGE PREPROCESSING FUNCTIONS==:

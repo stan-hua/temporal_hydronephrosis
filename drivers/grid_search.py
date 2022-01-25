@@ -18,23 +18,18 @@ class GridSearch:
     model_type_: str
     randomized: bool
 
-    def __init__(self, model_type_, timestamp_, grid_search_dir_):
+    def __init__(self, model_type_, timestamp_, grid_search_dir_, metric='loss'):
         self.model_type = model_type_
         self.timestamp = timestamp_
         self.grid_search_dir = grid_search_dir_
-        self.metric = 'loss'
+        self.metric = metric
         self.tested_combinations = self.get_tested_hyperparams()
 
     def sample_hyperparams(self, possible_hyperparams: dict):
         """Given search space, randomly sample a set of hyperparameters to test that has not been tested.
         If lists are given, an item will be selected. Otherwise, will remain as is.
         """
-        used = True
-
-        sampled_params = None
-
-        i = 0
-        while used:
+        for i in range(1000):
             sampled_params = {}
             for u in possible_hyperparams.keys():
                 v = possible_hyperparams[u]
@@ -44,12 +39,12 @@ class GridSearch:
                     sampled_params[u] = v
 
             if not self.is_hyperparam_used(sampled_params):
-                used = False
+                row = pd.DataFrame(sampled_params, index=[0])
+                self.tested_combinations = pd.concat([self.tested_combinations, row], ignore_index=True)
+                return sampled_params
 
             if i == 1000:  # upper limit, otherwise assume all have been tested
                 return None
-
-        return sampled_params
 
     def is_hyperparam_used(self, sample_hyperparams: dict):
         """Checks if sampled hyperparams have already been tested"""
@@ -62,8 +57,8 @@ class GridSearch:
 
         df_accum = pd.DataFrame()
         for dir_ in dirs_:
-            hyperparams = get_hyperparams(dir_)
-            row = pd.DataFrame(hyperparams, index=[0])
+            _hyperparams = get_hyperparams(dir_)
+            row = pd.DataFrame(_hyperparams, index=[0])
             df_accum = pd.concat([df_accum, row])
 
         return df_accum
@@ -97,7 +92,9 @@ class GridSearch:
         df_accum = pd.DataFrame()
         for dir_ in result_directories:
             df = aggregate_fold_histories(dir_)
-            df_best_epoch = df[df[f"val_{self.metric}"] == min(df[f"val_{self.metric}"])]
+
+            best_score = min(df[f"val_{self.metric}"]) if self.metric == 'loss' else max(df[f"val_{self.metric}"])
+            df_best_epoch = df[df[f"val_{self.metric}"] == best_score]
 
             # Add in parameters
             params = get_hyperparams(dir_)
@@ -114,40 +111,50 @@ class GridSearch:
     def perform_grid_search(self, search_space, n=None):
         """
         Performs randomized grid search on given specified parameter lists. Tested parameter combinations are saved.
-        @param lrs_: learning rates to test
-        @param batch_sizes_: batch sizes to test
-        @param momentums_: SGD momentums to test (if adam is True)
-        @param adams_: If contains True, will run adam. If contains False, will run SGD.
-        @param num_epochs_: number of epochs
-        @param n: maximum number of parameter combinations to test
+        :param search_space: dictionary, where keys are argument names for training script and values are potential
+            values to search.
+        :param n: number of trials to run
         """
+        if n == 0:
+            return
+
         params = self.sample_hyperparams(search_space)
+
+        if params is None:
+            return
+
         print(params)
-        command_str = f'python "{project_dir}/model_training_pl.py" '
+        command_str = f'python "{project_dir}/drivers/model_training_pl.py" '
         for u in params.keys():
             v = params[u]
-            command_str += f"--{u} {v} " if not isinstance(v, bool) else f"--{u} "
+            if not isinstance(v, bool):
+                command_str += f"--{u} {v} "
+            elif v is True:
+                    command_str += f"--{u} "
 
         print(command_str)
         subprocess.run(command_str, shell=True)
 
         if n is not None and n > 1:
             self.perform_grid_search(search_space, n - 1)
-        else:
-            self.save_grid_search_results()
 
     def save_grid_search_results(self):
         df = self.find_best_models()
-        best_model = df[df[f"val_{self.metric}"] == min(df[f"val_{self.metric}"])].iloc[0]
+
+        if len(df) == 0:
+            return
+
+        best_score = min(df[f"val_{self.metric}"]) if self.metric == 'loss' else max(df[f"val_{self.metric}"])
+        best_model = df[df[f"val_{self.metric}"] == best_score].iloc[0]
         best_model.to_json(f"{self.grid_search_dir}/best_parameters.json")
 
-        # noinspection PyTypeChecker
+        df = df.sort_values(by=[f"val_{self.metric}"])
         df.to_csv(f"{self.grid_search_dir}/grid_search({self.timestamp}).csv", index=False)
 
 
 def aggregate_fold_histories(dir_: str):
     """Get history for each epoch and aggregate them (mean across epochs)."""
-    histories = glob.glob(f"{dir_}/*/*/history.csv")
+    histories = glob(f"{dir_}/*/*/history.csv")
 
     df = pd.DataFrame()
     for history in histories:
@@ -182,22 +189,26 @@ if __name__ == "__main__":
     keep_best_weights = False
 
     timestamp = datetime.now().strftime("%Y-%m-%d")
-    # timestamp = '2022-01-03'
+    timestamp = '2022-01-23'
     grid_search_dir = f"{project_dir}/results/{model_type}{'_' if (len(model_type) > 0) else ''}grid_search({timestamp})/"
 
     if not os.path.exists(grid_search_dir):
         os.mkdir(grid_search_dir)
 
-    hyperparams = {'lr': [1e-3, 1e-2, 1e-4],
-                   "batch_size": [1, 16, 64, 128],
-                   'adam': [True, False],
-                   'momentum': [0.8, 0.9],
-                   'weight_decay': [5e-4, 5e-3],
-                   'weighted_loss': [0.5, 0.87],
-                   'output_dim': [128, 256, 512],
-                   'dropout_rate': [0, 0.25, 0.5],
-                   }
+    hyperparams = {
+        # 'lr': [1e-3, 1e-5, 1e-4],
+        # "batch_size": [1, 16, 64, 128],
+        # 'adam': [True, False],
+        # 'momentum': [0.8, 0.9],
+        # 'weight_decay': [5e-4, 5e-3],
+        # 'weighted_loss': [0.5, 0.87],
+        # 'output_dim': [128, 256, 512],
+        # 'dropout_rate': [0, 0.25, 0.5],
+        'include_cov': False,
 
-    gridSearch = GridSearch(model_type, timestamp, grid_search_dir)
-    gridSearch.perform_grid_search(hyperparams, n=8)
+        'model': 'baseline'
+    }
+
+    gridSearch = GridSearch(model_type, timestamp, grid_search_dir, metric='auprc')
+    # gridSearch.perform_grid_search(hyperparams, n=1)
     gridSearch.save_grid_search_results()

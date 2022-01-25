@@ -526,3 +526,19 @@ def main():
 
 if __name__ == '__main__':
     main()
+
+    all_embeds = None
+    all_target = None
+
+    model.eval()
+    with torch.no_grad():
+        for batch_idx, (data_dict, target, cov) in enumerate(test_dl):
+            model.zero_grad()
+            embeds = model.forward_embed(data_dict)
+
+            if all_embeds is None:
+                all_embeds = embeds
+                all_target = target.detach().numpy()
+            else:
+                all_embeds = np.concatenate([all_embeds, embeds])
+                all_target = np.concatenate([all_target, target.detach().numpy()])

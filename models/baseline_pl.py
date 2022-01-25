@@ -1,16 +1,26 @@
 """Baseline Siamese 2D CNN model.
 """
 
-import torch
-from torch import nn
+import numpy as np
 import pytorch_lightning as pl
-import torch.nn.functional as F
+import torch
 import torchmetrics.functional
+from torch import nn
 
 
-# noinspection PyTypeChecker,PyUnboundLocalVariable
 class SiamNet(pl.LightningModule):
     def __init__(self, model_hyperparams=None):
+        """
+        :param model_hyperparams: dictionary/namespace containing the following hyperparameters...
+            lr: learning rate number
+            batch_size: batch size number
+            adam: boolean value. If true, use adam optimizer. Otherwise, SGD is used.
+            include_cov: include covariate layers in input and forward pass
+            dropout_rate: dropout rate for linear layers fc8, fc9
+            weighted_loss: weight between (0, 1) to assign to positive class. Negative class receives 1 - weighted_loss.
+            output_dim: dimensionality of features in layer before prediction layer
+            stop_epoch: epoch at which to stop at
+        """
         super(SiamNet, self).__init__()
 
         # Save hyperparameters to checkpoint
@@ -84,11 +94,6 @@ class SiamNet(pl.LightningModule):
         self.fc9.add_module('relu9', nn.ReLU(inplace=True))
         self.fc9.add_module('drop9', nn.Dropout(p=self.hparams.dropout_rate))
 
-        # self.fc10 = nn.Sequential()
-        # self.fc10.add_module('fc10', nn.Linear(512, self.hparams.output_dim))
-        # self.fc10.add_module('relu10', nn.ReLU(inplace=True))
-        # self.fc10.add_module('drop10', nn.Dropout(p=dropout_rate))
-
         self.fc10 = nn.Sequential()
         self.fc10.add_module('fc10', nn.Linear(self.hparams.output_dim, 2))
 
@@ -160,44 +165,6 @@ class SiamNet(pl.LightningModule):
             x = self.fc10c(x)
 
         return torch.log_softmax(x, dim=1)
-
-    @torch.no_grad()
-    def forward_embed(self, data):
-        x = data['img']
-
-        B, T, C, H = x.size()
-        x = x.transpose(0, 1)
-        x_list = []
-        for i in range(2):
-            z = torch.unsqueeze(x[i], 1)
-            z = z.expand(-1, 3, -1, -1)
-            z = self.conv1(z)
-            z = self.conv2(z)
-            z = self.conv3(z)
-            z = self.conv4(z)
-            z = self.conv5(z)
-            z = self.conv6(z)
-            z = self.conv7(z)
-            z = z.view([B, 1, -1])
-            z = self.fc8(z)
-            z = z.view([B, 1, -1])
-            x_list.append(z)
-
-        x = torch.cat(x_list, 1)
-        x = x.view(B, -1)
-
-        if not self.hparams.include_cov:
-            return x.cpu().detach().numpy()
-        else:
-            x = self.fc9(x)
-            x = self.fc10(x)
-
-            age = data['Age_wks'].view(B, 1)
-            side = data['Side_L'].view(B, 1)
-
-            x = torch.cat((x, age, side), 1)
-            x = self.fc10b(x)
-            return x.cpu().detach().numpy()
 
     def training_step(self, train_batch, batch_idx):
         data_dict, y_true, id_ = train_batch
@@ -285,6 +252,63 @@ class SiamNet(pl.LightningModule):
         self.test_auroc.reset()
         self.test_auprc.reset()
 
+    @torch.no_grad()
+    def forward_embed(self, data):
+        x = data['img']
+
+        B, T, C, H = x.size()
+        x = x.transpose(0, 1)
+        x_list = []
+        for i in range(2):
+            z = torch.unsqueeze(x[i], 1)
+            z = z.expand(-1, 3, -1, -1)
+            z = self.conv1(z)
+            z = self.conv2(z)
+            z = self.conv3(z)
+            z = self.conv4(z)
+            z = self.conv5(z)
+            z = self.conv6(z)
+            z = self.conv7(z)
+            z = z.view([B, 1, -1])
+            z = self.fc8(z)
+            z = z.view([B, 1, -1])
+            x_list.append(z)
+
+        x = torch.cat(x_list, 1)
+        x = x.view(B, -1)
+        x = self.fc9(x)
+
+        if not self.hparams.include_cov:
+            return x.cpu().detach().numpy()
+        else:
+            x = self.fc10(x)
+
+            age = data['Age_wks'].view(B, 1)
+            side = data['Side_L'].view(B, 1)
+
+            x = torch.cat((x, age, side), 1)
+            x = self.fc10b(x)
+            return x.cpu().detach().numpy()
+
+    def extract_embeddings(self, dataloader):
+        """Extract embeddings, and return labels and IDs for all items in inserted dataloader."""
+        embed_lst = []
+        y_list = []
+        id_list = []
+
+        self.eval()
+        for batch_idx, (data_dict, y_true, id_) in enumerate(dataloader):
+            out = self.forward_embed(data_dict)
+            embed_lst.append(out)
+            y_list.append(y_true.numpy())
+            id_list.append(id_)
+
+        embeds = np.concatenate(embed_lst, axis=0)
+        labels = np.concatenate(y_list, axis=None)
+        ids = np.concatenate(id_list, axis=None)
+
+        return embeds, labels, ids
+
 
 class LRN(nn.Module):
     def __init__(self, local_size=1, alpha=1.0, beta=0.75, ACROSS_CHANNELS=True):
@@ -311,3 +335,40 @@ class LRN(nn.Module):
 
         x = x.div(div)
         return x
+
+
+if __name__ == '__main__':
+    import umap
+    import numpy as np
+    import torch
+    from utilities.data_visualizer import plot_umap
+
+    hyperparams = {'lr': 0.001, "batch_size": 16,
+                   'adam': True,
+                   'momentum': 0.9,
+                   'weight_decay': 0.0005,
+                   'include_cov': True,
+                   'output_dim': 128,
+                   'dropout_rate': 0,
+                   'weighted_loss': 0.5,
+                   'stop_epoch': 40
+                   }
+    model = SiamNet(hyperparams)
+
+    def simulate(n=100):
+        data = {"img": torch.from_numpy(np.random.rand(n, 2, 256, 256)).type(torch.FloatTensor),
+                "Age_wks": torch.from_numpy((np.random.rand(n) * 40).round()).type(torch.FloatTensor),
+                "Side_L": torch.from_numpy(np.random.randint(0, 2, n)).type(torch.FloatTensor)}
+        labels = np.random.randint(0, 2, n)
+        output_ = model.forward_embed(data)
+        reducer_ = umap.UMAP(random_state=42)
+        embeds_ = reducer_.fit_transform(output_)
+        plot_umap(embeds_, labels)
+    
+    reducer = umap.UMAP(random_state=42)
+    umap_embeds = reducer.fit_transform(output)
+
+    plot_umap(umap_embeds, labels)
+
+
+
