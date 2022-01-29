@@ -22,12 +22,13 @@ from models.tsm import SiamNetTSM
 from utilities.custom_logger import FriendlyCSVLogger
 from utilities.dataset_prep import KidneyDataModule
 from utilities.data_visualizer import plot_umap
+from utilities.kornia_augmentation import DataAugmentation
 
 warnings.filterwarnings('ignore')
 
 SEED = 42
 model_name = ""
-MODEL_TYPES = ("baseline", "conv_pool", "lstm", "tsm", "stgru")
+MODEL_TYPES = ("baseline", "avg_pred", "conv_pooling", "lstm", "tsm")
 
 project_dir = "C:\\Users\\Stanley Hua\\projects\\temporal_hydronephrosis\\"
 results_dir = f"{project_dir}results\\"
@@ -79,10 +80,26 @@ def parseArgs():
     parser.add_argument("--include_cov", action="store_true",
                         help="Include covariates (age at ultrasound and kidney side (R/L)) in model.")
     parser.add_argument("--accum_grad_batches", default=None, help="Number of batches to accumulate gradient.")
-    parser.add_argument("--dropout_rate", default=0.5, type=float,
+    parser.add_argument("--dropout_rate", default=0, type=float,
                         help="Dropout rate to apply on last linear layers during training.")
     parser.add_argument("--weighted_loss", default=0.5, type=float,
                         help="Weight to assign to positive class in calculating loss.")
+
+    parser.add_argument("--gradient_clip_norm", default=0., type=float,
+                        help="Norm value for gradient clipping via vector norm.")
+    parser.add_argument("--precision", default=32, type=int, help="Precision for training (32/16).")
+
+    parser.add_argument('--augment_training', action="store_true", default=False, help="Allow image augmentation.")
+    parser.add_argument('--augment_probability', default=0., type=float,
+                        help="Probability of augmentations during training.")
+    parser.add_argument('--normalize', action="store_true", default=False, help="Add normalization to augmentations.")
+    parser.add_argument('--random_rotation', action="store_true", default=False, help="Add rotation to augmentations.")
+    parser.add_argument('--color_jitter', action="store_true", default=False, help="Add color jitter to augmentations.")
+    parser.add_argument('--random_gaussian_blur', action="store_true", default=False,
+                        help="Add gaussian blur to augmentations.")
+    parser.add_argument('--random_motion_blur', action="store_true", default=False,
+                        help="Add motion blur to augmentations.")
+    parser.add_argument('--random_noise', action="store_true", default=False, help="Add random noise to augmentations.")
 
     parser.add_argument("--num_workers", default=1, type=int, help="Number of CPU workers")
     parser.add_argument("--split", default=0.7, type=float, help="proportion of dataset to use as training")
@@ -96,6 +113,8 @@ def parseArgs():
                         help="If not running cross validation, which epoch to finish with")
     parser.add_argument("--save_frequency", default=100, type=int, help="Save model weights every <x> epochs")
     parser.add_argument("--train_only", action="store_true", help="Only fit train/val")
+    parser.add_argument("--test_last_visit", action="store_true", default=True,
+                        help="For single-visit baseline, only take last visit.")
 
     parser.add_argument("--contrast", default=1, type=int, help="Image contrast to train on")
     parser.add_argument("--crop", default=0, type=int, help="Crop setting (0=big, 1=tight)")
@@ -118,15 +137,13 @@ def modifyArgs(args):
     args.weight_decay = 0.0005
     args.weighted_loss = 0.5
     args.dropout_rate = 0.5
-    args.include_cov = False
-    args.stop_epoch = 40
+    args.include_cov = True
+    args.stop_epoch = 26
     args.output_dim = 256
 
-    args.gradient_clip_norm = None      # or None, 1
-    args.precision = 32                 # or 16, 32
+    args.gradient_clip_norm = 1  # or None, 1
+    args.precision = 32  # or 16, 32
 
-    # args.early_stopping_patience = 100
-    # args.save_frequency = 1000  # Save weights every x epochs
     args.load_hyperparameters = False
     args.pretrained = False
 
@@ -135,8 +152,6 @@ def modifyArgs(args):
 
     if args.model == "baseline":
         model_name = "Siamese_Baseline"
-    elif args.model == "conv_pool":
-        model_name = "Siamese_ConvPooling"
     else:
         model_name = f"Siamese_{args.model.upper()}"
 
@@ -145,25 +160,38 @@ def modifyArgs(args):
     # Data parameters
     if args.model == MODEL_TYPES[0]:  # for single-visit models
         args.single_visit = True
+        args.test_last_visit = True
     else:  # for multiple-visit models
         args.single_visit = False
+        args.test_last_visit = False
         args.accum_grad_batches = args.batch_size
         args.batch_size = 1
 
     args.balance_classes = False
     args.num_workers = 4
 
+    # Image augmentation
+    args.augment_training = True
+    # args.normalize = False
+    # args.random_rotation = False
+    # args.color_jitter = False
+    args.random_gaussian_blur = True
+    # args.random_motion_blur = False
+    # args.random_noise = False
+    #
+    args.augment_probability = 0.5
+
     # Test set parameters
     args.test_only = False
     args.ordered_split = False
 
     # Validation set parameters
-    args.include_validation = not args.test_only and True
+    args.include_validation = not args.test_only and False
     args.cv = args.include_validation and True
     args.num_folds = 5 if (args.cv and args.include_validation) else 1
 
     if not args.cv and args.include_validation:
-        args.ordered_validation = True      # train and validation split
+        args.ordered_validation = True  # train and validation split
 
 
 def load_hyperparameters(hyperparameters: dict, path: str):
@@ -182,9 +210,52 @@ def load_hyperparameters(hyperparameters: dict, path: str):
         print(hyperparameters)
 
 
-def choose_model(args, hyperparams):
-    global curr_results_dir, best_hyperparameters_folder
+def create_augmentation_str(args):
+    """Create string from augmentations enabled."""
+    if not args.augment_training:
+        return ""
+
+    augmentations = []
+
+    if args.normalize:
+        augmentations.append("normalize")
+    if args.random_rotation:
+        augmentations.append("rotate")
+    if args.color_jitter:
+        augmentations.append("color_jitter")
+    if args.random_gaussian_blur:
+        augmentations.append("gaussian_blur")
+    if args.random_motion_blur:
+        augmentations.append("motion_blur")
+    if args.random_noise:
+        augmentations.append("gaussian_noise")
+
+    augmentations_str = "-".join(augmentations)
+
+    return augmentations_str
+
+
+def instantiate_augmenter(args):
+    """Instantiate image data augmentation object based on arguments. Return augmenter and name (given by all
+    augmentation types enabled."""
+    if not args.augment_training or args.model is not 'baseline':
+        return None
+
+    augmenter = DataAugmentation(normalize=args.normalize, random_rotation=args.random_rotation,
+                                 color_jitter=args.color_jitter, random_gaussian_blur=args.random_gaussian_blur,
+                                 random_motion_blur=args.random_motion_blur, random_noise=args.random_noise,
+                                 prob=args.augment_probability)
+
+    return augmenter
+
+
+def instantiate_model(args, hyperparams):
+    """Instantiate model based on arguments. Insert hyperparameters. If specified by arguments, add augmentation to
+    model."""
+    global curr_results_dir
     old_checkpoint = ""
+
+    augmenter = instantiate_augmenter(args)
 
     if args.model == "conv_pool":
         model = SiamNetConvPooling(model_hyperparams=hyperparams)
@@ -201,7 +272,7 @@ def choose_model(args, hyperparams):
         # TODO: Implement this
         raise NotImplementedError("STGRU has not yet been implemented!")
     else:  # baseline single-visit
-        model = SiamNet(model_hyperparams=hyperparams)
+        model = SiamNet(model_hyperparams=hyperparams, augmentation=augmenter)
         old_checkpoint = f"{results_dir}/Siamese_Baseline_2022-01-03_11-48-24/model-epoch_38-fold1.pth"
 
     # Load weights
@@ -230,11 +301,9 @@ def update_paths(model_type):
 
 
 # Training
-def train(config, args, dm, fold=0, checkpoint=True, tune=False, version_name=None):
-    global best_hyperparameters_folder
-
-    print(f"Fold {fold}/{args.num_folds} Starting...")
-    model = choose_model(args, config)
+def train(config, args, dm, fold=0, checkpoint=True, tune_hyperparams=False, version_name=None):
+    print(f"Fold {fold + 1}/{args.num_folds} Starting...")
+    model = instantiate_model(args, config)
 
     # Loggers
     csv_logger = FriendlyCSVLogger(f"{curr_results_dir}", name=f'fold{fold}', version=version_name)
@@ -245,8 +314,10 @@ def train(config, args, dm, fold=0, checkpoint=True, tune=False, version_name=No
     if checkpoint:
         callbacks.append(
             ModelCheckpoint(dirpath=f"{curr_results_dir}fold{fold}/version_{csv_logger.version}/checkpoints",
-                            monitor="val_loss"))
-    if tune:
+                            # monitor="val_loss",
+                            save_last=True
+                            ))
+    if tune_hyperparams:
         callbacks.append(TuneReportCallback({'val_loss': 'val_loss'}, on='validation_end'))
 
     # Get dataloaders
@@ -267,14 +338,23 @@ def train(config, args, dm, fold=0, checkpoint=True, tune=False, version_name=No
                       logger=[csv_logger, tensorboard_logger],
                       # fast_dev_run=True,
                       )
+    folder = "C:\\Users\\Stanley Hua\\projects\\temporal_hydronephrosis\\results\\Siamese_Baseline_2022-01-27_19-59-33\\fold0\\version_0"
+    model = model.load_from_checkpoint(f"{folder}/checkpoints/last.ckpt", hparams_file=f"{folder}/hparams.yaml")
+    # trainer.fit(model, train_dataloader=train_loader,
+    #             val_dataloaders=val_loader if args.include_validation else None)
 
-    trainer.fit(model, train_dataloader=train_loader, val_dataloaders=val_loader)
-    # trainer.test(test_dataloaders=test_loader)
+    trainer.test(test_dataloaders=[
+        dm.test_dataloader(),
+        dm.st_test_dataloader(),
+        dm.stan_test_dataloader(),
+        dm.ui_test_dataloader()
+    ],
+        model=model)
 
 
-def extract_embeddings(ckpt_path, args, hyperparams, dm):
-    model = choose_model(args, hyperparams)
-    model = model.load_from_checkpoint(ckpt_path)
+def extract_embeddings(checkpoint_path, args, hyperparams, dm):
+    model = instantiate_model(args, hyperparams)
+    model = model.load_from_checkpoint(checkpoint_path)
     val_loader = dm.val_dataloader()
     embeds, labels, ids = model.extract_embeddings(val_loader)
 
@@ -289,10 +369,10 @@ def main():
     print(timestamp)
     args = parseArgs()
     modifyArgs(args)
+    args.augmentations_str = create_augmentation_str(args)
 
     # Paths
     update_paths(args.model)
-    i = 1
     # try:
     # If folder is non-existent, create folder for storing results
     if not os.path.isdir(curr_results_dir):
@@ -316,7 +396,11 @@ def main():
                        'weighted_loss': args.weighted_loss,
                        'stop_epoch': args.stop_epoch,
                        'gradient_clip_norm': args.gradient_clip_norm,
-                       'precision': args.precision
+                       'precision': args.precision,
+                       'model': args.model,
+                       'augmented': args.augment_training,
+                       'augment_probability': args.augment_probability,
+                       'augmentations_str': args.augmentations_str
                        }
 
         if args.load_hyperparameters:
@@ -331,7 +415,8 @@ def main():
                        'persistent_workers': True if args.num_workers else False, }
 
         dm = KidneyDataModule(args, data_params)
-        dm.setup()
+        dm.setup('fit')
+        dm.setup('test')
 
         for fold in range(5 if args.cv else 1):
             train(config=hyperparams, args=args, dm=dm, fold=fold, checkpoint=True)

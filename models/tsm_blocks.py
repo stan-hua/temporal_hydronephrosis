@@ -28,6 +28,10 @@ class TemporalShift(nn.Module):
     @staticmethod
     def shift(x, n_segment, fold_div=3, inplace=False):
         nt, c, h, w = x.size()
+
+        if nt == 1:     # MODIFIED: If input has only 1 time point, no shift is performed.
+            return x
+
         n_batch = nt // n_segment
         x = x.view(n_batch, n_segment, c, h, w)
 

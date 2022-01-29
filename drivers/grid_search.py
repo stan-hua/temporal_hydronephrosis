@@ -48,9 +48,12 @@ class GridSearch:
 
     def is_hyperparam_used(self, sample_hyperparams: dict):
         """Checks if sampled hyperparams have already been tested"""
-        all_compared = pd.DataFrame(sample_hyperparams, index=[0]).isin(self.tested_combinations.values.ravel())
-        row_comparisons = all_compared.mean(axis=1)
-        return any(row_comparisons == 1)
+        # Get intersecting columns
+        search_columns = set(list(sample_hyperparams.keys()))
+        available_columns = set(self.tested_combinations.columns.tolist())
+        cols = list(search_columns.intersection(available_columns))
+
+        return list(sample_hyperparams.values()) in gridSearch.tested_combinations[cols].values.tolist()
 
     def get_tested_hyperparams(self):
         dirs_ = self.get_training_dirs()
@@ -69,14 +72,20 @@ class GridSearch:
         try:  # Move existing folders to grid search directory
             timestamp_split = self.timestamp.split('-')
             all_dirs = glob(f"{project_dir}/results/*")
-            next_timestamp = f"{timestamp_split[0]}-{timestamp_split[1]}-{(int(timestamp_split[-1]) + 1)}"
+
+            if len(timestamp_split) <= 1:
+                next_timestamp = "None"
+            else:
+                f"{timestamp_split[0]}-{timestamp_split[1]}-{(int(timestamp_split[-1]) + 1)}"
+
             temp_folders = []
             for i in all_dirs:
                 if (self.timestamp in i or next_timestamp in i) and ("grid_search" not in i) and (self.model_type in i):
                     temp_folders.append(i)
 
             for folder in temp_folders:
-                shutil.move(folder, self.grid_search_dir)
+                if len(os.listdir(folder)) != 1:
+                    shutil.move(folder, self.grid_search_dir)
         except FileNotFoundError:
             pass
         return [file for file in glob(f"{self.grid_search_dir}/*") if "csv" not in file and "json" not in file]
@@ -130,12 +139,11 @@ class GridSearch:
             if not isinstance(v, bool):
                 command_str += f"--{u} {v} "
             elif v is True:
-                    command_str += f"--{u} "
+                command_str += f"--{u} "
 
-        print(command_str)
         subprocess.run(command_str, shell=True)
 
-        if n is not None and n > 1:
+        if n is not None:
             self.perform_grid_search(search_space, n - 1)
 
     def save_grid_search_results(self):
@@ -179,6 +187,10 @@ def get_hyperparams(dir_: str):
         weights = hparams.pop("loss_weights")
         hparams["weighted_loss"] = weights[-1]
 
+    if 'augmentation_type' in hparams:
+        augmentations_str = hparams.pop('augmentation_type')
+        hparams['augmentations_str'] = augmentations_str
+
     return hparams
 
 
@@ -189,13 +201,13 @@ if __name__ == "__main__":
     keep_best_weights = False
 
     timestamp = datetime.now().strftime("%Y-%m-%d")
-    timestamp = '2022-01-23'
+    timestamp = 'augmentations'
     grid_search_dir = f"{project_dir}/results/{model_type}{'_' if (len(model_type) > 0) else ''}grid_search({timestamp})/"
 
     if not os.path.exists(grid_search_dir):
         os.mkdir(grid_search_dir)
 
-    hyperparams = {
+    search_space = {
         # 'lr': [1e-3, 1e-5, 1e-4],
         # "batch_size": [1, 16, 64, 128],
         # 'adam': [True, False],
@@ -203,12 +215,22 @@ if __name__ == "__main__":
         # 'weight_decay': [5e-4, 5e-3],
         # 'weighted_loss': [0.5, 0.87],
         # 'output_dim': [128, 256, 512],
-        # 'dropout_rate': [0, 0.25, 0.5],
+        'dropout_rate': [0.5],
+        # 'gradient_clip_norm': [0.5, 2, 4],
+        'gradient_clip_norm': 1,
+        'precision': 32,
+        'augment_training': True,
+        'augment_probability': 0.5,      # [0.25, 0.5, 0.75],
+        'normalize': True,
+        # 'random_rotation': [True, False],
+        # 'color_jitter': [True, False],
+        'random_gaussian_blur': True,
+        # 'random_motion_blur': [True, False],
+        # 'random_noise': [True, False],
         'include_cov': False,
-
         'model': 'baseline'
     }
 
     gridSearch = GridSearch(model_type, timestamp, grid_search_dir, metric='auprc')
-    # gridSearch.perform_grid_search(hyperparams, n=1)
+    # gridSearch.perform_grid_search(search_space, n=1)
     gridSearch.save_grid_search_results()

@@ -3,9 +3,8 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 import seaborn as sns
-import umap
 
-from utilities.dataset_prep import load_dataset, get_data_dicts, KidneyDataModule
+from utilities.dataset_prep import KidneyDataModule
 
 matplotlib.use("Qt5Agg")
 
@@ -18,7 +17,7 @@ class DataViewer:
         """
         Initialize DataViewer class.
 
-        :param img_dict: Mapping of patient ID to images
+        :param img_dict: Mapping of patient ID to patient's images
         :param label_dict: Mapping from patient ID to surgery labels
         :param cov_dict: Mapping from patient ID to covariates
         :param study_ids: list of patient IDs
@@ -43,6 +42,7 @@ class DataViewer:
     def extract_num_visits(self, df_cov):
         """Preprocess dataframe of covariates to get information on each sample (e.g. patient kidney) over multiple
         visits."""
+
         def _extract_info_per_patient(df_):
             """Get the age range (max - min) of patient across all their visits, and get their number of visits"""
             age_range = max(df_["Age_wks"]) - min(df_['Age_wks'])
@@ -73,11 +73,11 @@ class DataViewer:
         plt.xticks(np.arange(min(self.df_examples['num_visits']), max(self.df_examples['num_visits']) + 1, 1))
         plt.xlabel("Number of Visits")
         plt.ylabel("Count")
-        plt.tight_layout()
 
         if title is not None:
             plt.title(title)
 
+        plt.tight_layout()
         plt.show()
 
     def plot_age(self, title=None):
@@ -85,11 +85,11 @@ class DataViewer:
         sns.histplot(data=self.df_cov, x='Age_wks', hue='surgery', multiple='stack', ax=ax)
         plt.xlabel("Age (in weeks)")
         plt.ylabel("Count")
-        plt.tight_layout()
 
         if title is not None:
             plt.title(title)
 
+        plt.tight_layout()
         plt.show()
 
 
@@ -121,6 +121,7 @@ def load_data():
     from drivers.model_training_pl import parseArgs, modifyArgs
     args = parseArgs()
     modifyArgs(args)
+    args.test_last_visit = False
 
     data_params = {'batch_size': 1,
                    'shuffle': True,
@@ -129,10 +130,11 @@ def load_data():
                    'persistent_workers': True if args.num_workers else False}
 
     dm = KidneyDataModule(args, data_params)
-    dm.setup()
+    dm.setup('fit')
+    dm.setup('test')
     dm.fold = 0
-    dm.train_dataloader()       # to save training set to object
-    dm.val_dataloader()         # to save validation set to object
+    dm.train_dataloader()  # to save training set to object
+    dm.val_dataloader()  # to save validation set to object
 
     return dm
 
@@ -156,9 +158,13 @@ def describe_data(data_dicts, plot_title=None):
 if __name__ == "__main__":
     dm = load_data()
 
-    train_viewer, df_train_cov, df_train_examples = describe_data(dm.train_dicts, plot_title='Ordered Training Set')
-    val_viewer, df_val_cov, df_val_examples = describe_data(dm.val_dicts, plot_title='Ordered Validation Set')
-    test_viewer, df_test_cov, df_test_examples = describe_data(dm.test_set, plot_title='Ordered Test Set')
+    # train_viewer, df_train_cov, df_train_examples = describe_data(dm.train_dicts, plot_title='Ordered Training Set')
+    # val_viewer, df_val_cov, df_val_examples = describe_data(dm.val_dicts, plot_title='Ordered Validation Set')
+    test_viewer, df_test_cov, df_test_examples = describe_data(dm.test_set, plot_title='Unordered Test Set')
+
+    stan_viewer, df_stan_cov, df_stan_examples = describe_data(dm.stan_test_set, plot_title='Stanford Data')
+    # st_viewer, df_st_cov, df_st_examples = describe_data(dm.st_test_set, plot_title='SickKids Silent Trial Data')
+    # ui_viewer, df_ui_cov, df_ui_examples = describe_data(dm.ui_test_set, plot_title='UIowa Data')
 
     # describe_data((X_train_, y_train_, cov_train_), (X_test_, y_test_, cov_test_))
 

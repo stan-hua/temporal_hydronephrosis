@@ -1,4 +1,5 @@
-"""Baseline Siamese 2D CNN, followed by an LSTM.
+"""
+Baseline Siamese 2D CNN, followed by an LSTM.
 """
 
 import numpy as np

@@ -13,7 +13,6 @@ import numpy as np
 import pytorch_lightning as pl
 import torch
 from PIL import Image
-from kornia.augmentation import *
 from skimage import img_as_float, transform, exposure
 from skimage.transform import resize
 from sklearn.model_selection import StratifiedKFold, StratifiedShuffleSplit
@@ -79,20 +78,22 @@ class KidneyDataModule(pl.LightningDataModule):
             # Test set
             if not args.train_only:
                 self.test_set = get_data_dicts(test_dict, data_dir=args.data_dir, seq=not args.single_visit,
-                                               last_visit_only=args.single_visit)
-
-        if stage == 'test_heldout':
+                                               last_visit_only=args.test_last_visit)
+        else:  # External test sets
             # Silent Trial
             st_test_dict = load_test_dataset(args.json_st_test, data_dir=args.data_dir)
-            self.st_test_set = get_data_dicts(st_test_dict, data_dir=args.data_dir, silent_trial=True)
+            self.st_test_set = get_data_dicts(st_test_dict, data_dir=args.data_dir, silent_trial=True,
+                                              last_visit_only=args.test_last_visit)
 
             # Stanford
             stan_test_dict = load_test_dataset(args.json_stan_test, data_dir=args.data_dir)
-            self.stan_test_set = get_data_dicts(stan_test_dict, data_dir=args.data_dir)
+            self.stan_test_set = get_data_dicts(stan_test_dict, data_dir=args.data_dir,
+                                                last_visit_only=args.test_last_visit)
 
             # UIowa
             ui_test_dict = load_test_dataset(args.json_ui_test, data_dir=args.data_dir)
-            self.ui_test_set = get_data_dicts(ui_test_dict, data_dir=args.data_dir)
+            self.ui_test_set = get_data_dicts(ui_test_dict, data_dir=args.data_dir,
+                                              last_visit_only=args.test_last_visit)
 
     def train_dataloader(self):
         train_idx, _ = self._train_val_idx_generator[self.fold]
@@ -136,52 +137,19 @@ class KidneyDataModule(pl.LightningDataModule):
         return test_generator
 
     def st_test_dataloader(self):
-        st_test_set = KidneyDataset(data_dicts=self.st_test_set, include_cov=args.include_cov)
+        st_test_set = KidneyDataset(data_dicts=self.st_test_set, include_cov=self.args.include_cov)
         st_test_generator = DataLoader(st_test_set, **self.val_dataloader_params)
         return st_test_generator
 
     def stan_test_dataloader(self):
-        stan_test_set = KidneyDataset(data_dicts=self.stan_test_set, include_cov=args.include_cov)
+        stan_test_set = KidneyDataset(data_dicts=self.stan_test_set, include_cov=self.args.include_cov)
         stan_test_generator = DataLoader(stan_test_set, **self.val_dataloader_params)
         return stan_test_generator
 
     def ui_test_dataloader(self):
-        ui_test_set = KidneyDataset(data_dicts=self.ui_test_set, include_cov=args.include_cov)
+        ui_test_set = KidneyDataset(data_dicts=self.ui_test_set, include_cov=self.args.include_cov)
         ui_test_generator = DataLoader(ui_test_set, **self.val_dataloader_params)
         return ui_test_generator
-
-
-class DataAugmentation(torch.nn.Module):
-    """Module to perform batch data augmentation on torch tensors using Kornia."""
-
-    def __init__(self, normalize=False, random_rotation=False, color_jitter=False,
-                 random_gaussian_blur=False, random_motion_blur=False, random_noise=False,
-                 prob=0.) -> None:
-        super().__init__()
-        self.transforms = torch.nn.Sequential()
-
-        if normalize:
-            self.transforms.add(Normalize(mean=0.0, std=1.0, p=1.0))
-
-        if random_rotation:
-            self.transforms.add(RandomRotation((-0.15, 0.15), p=prob))
-
-        if color_jitter:
-            self.transforms.add(ColorJitter(brightness=[0.5, 2], contrast=[0.5, 2], p=prob))
-
-        if random_gaussian_blur:
-            self.transforms.add(RandomGaussianBlur((3, 3), (0.1, 2.0), p=prob))
-
-        if random_motion_blur:
-            self.transforms.add(RandomMotionBlur(3, 35., 0.5, p=prob))
-
-        if random_noise:
-            self.transforms.add(RandomGaussianNoise(p=prob))
-
-    @torch.no_grad()
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
-        x_augmented = self.transforms(x)
-        return x_augmented
 
 
 # ==DATA LOADING==:
@@ -298,7 +266,8 @@ def get_data_dicts(in_dict, data_dir, update_num=None, silent_trial=False, last_
     :param silent_trial: If data is from silent trial, perform specific processing
     :param update_num: Number to append to patient ID if transformation is applied
     :param last_visit_only: If true, only include the last ultrasound visit.
-    :param seq: If true, returned dicts will contain sequences (lists) of images and covariates, corresponding to visits
+    :param seq: If true, returned dicts will contain sequences (lists) of images and covariates, corresponding to
+        patient's visits
     :param include_baseline_date: If true, include baseline date for each patient.
     """
     img_dict = dict()
@@ -316,7 +285,7 @@ def get_data_dicts(in_dict, data_dir, update_num=None, silent_trial=False, last_
                     continue
 
                 if last_visit_only:
-                    us_nums = sorted(us_nums)[-1]
+                    us_nums = sorted(us_nums)[-1:]
 
                 for us_num in us_nums:
                     try:
@@ -340,13 +309,13 @@ def get_data_dicts(in_dict, data_dir, update_num=None, silent_trial=False, last_
 
                     # Verify label and covariate age
                     if surgery not in [0, 1]:
-                        print("Invalid surgery value! Will be skipped.")
+                        print(f"Invalid surgery value! {study_id} will be skipped.")
                         continue
                     if age_wks < 0:
-                        print("Negative age value! Will be skipped.")
+                        print(f"Negative age value! {study_id} will be skipped.")
                         continue
                     elif age_wks > 52 * 10:
-                        print("Patient over the age of 10! Will be skipped.")
+                        print(f"Patient over the age of 10! {study_id} will be skipped.")
                         continue
 
                     # Initialize
@@ -585,6 +554,7 @@ def crop_image(image, random_crop=False):
 
 
 def special_ST_preprocessing(img_file, output_dim=256):
+    """Special image preprocessing for Silent Trial data."""
     if "preprocessed" in img_file:
         my_img = process_input_image(img_file)
     else:
