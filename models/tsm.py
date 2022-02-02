@@ -9,7 +9,7 @@ import numpy as np
 import torch
 from torch import nn
 
-from models.baseline_pl import SiamNet
+from models.baseline import SiamNet
 from models.tsm_blocks import *
 
 
@@ -18,18 +18,16 @@ class SiamNetTSM(SiamNet):
     def __init__(self, model_hyperparams):
         super().__init__(model_hyperparams)
 
-        self.conv2.conv2_s1 = TemporalShift(self.conv2.conv2_s1, n_segment=1, inplace=True)
-        self.conv3.conv3_s1 = TemporalShift(self.conv3.conv3_s1, n_segment=1, inplace=True)
-        self.conv4.conv4_s1 = TemporalShift(self.conv4.conv4_s1, n_segment=1, inplace=True)
-        self.conv5.conv5_s1 = TemporalShift(self.conv5.conv5_s1, n_segment=1, inplace=True)
-        self.conv6.conv6_s1 = TemporalShift(self.conv6.conv6_s1, n_segment=1, inplace=True)
-        self.conv7.conv7_s1 = TemporalShift(self.conv7.conv7_s1, n_segment=1, inplace=True)
+        self.shift = TemporalShift(n_segment=1, inplace=True)
 
     def forward(self, data):
         """Batch of images correspond to the images for one patient, where it is of the form (T,V,H,W).
         V refers to ultrasound view/plane (sagittal, transverse) and T refers to number of time points.
         """
-        x = data['img'][0]
+        x = data['img']
+
+        if len(x.size()) == 5:
+            x = x[0]
 
         T, V, H, W = x.size()
         x = x.transpose(0, 1)
@@ -38,12 +36,25 @@ class SiamNetTSM(SiamNet):
             z = torch.unsqueeze(x[i], 1)
             z = z.expand(-1, 3, -1, -1)
             z = self.conv1(z)
+
+            z = self.shift(z)
             z = self.conv2(z)
+
+            z = self.shift(z)
             z = self.conv3(z)
+
+            z = self.shift(z)
             z = self.conv4(z)
+
+            z = self.shift(z)
             z = self.conv5(z)
+
+            z = self.shift(z)
             z = self.conv6(z)
+
+            z = self.shift(z)
             z = self.conv7(z)
+
             z = z.view([T, 1, -1])
             z = self.fc8(z)
             z = z.view([T, 1, -1])

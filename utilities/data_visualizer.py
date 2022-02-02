@@ -118,9 +118,9 @@ def plot_umap(embeds, labels, save_dir=None, plot_name="UMAP"):
 
 
 def load_data():
-    from drivers.model_training_pl import parseArgs, modifyArgs
-    args = parseArgs()
-    modifyArgs(args)
+    from drivers.model_training import parse_args, modify_args
+    args = parse_args()
+    modify_args(args)
     args.test_last_visit = False
 
     data_params = {'batch_size': 1,

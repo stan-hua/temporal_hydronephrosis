@@ -6,7 +6,7 @@ import numpy as np
 import torch
 from torch import nn
 
-from models.baseline_pl import SiamNet
+from models.baseline import SiamNet
 
 
 # noinspection PyTypeChecker,PyUnboundLocalVariable

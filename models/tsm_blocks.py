@@ -1,4 +1,6 @@
 """
+Modified from:
+
 Code for "TSM: Temporal Shift Module for Efficient Video Understanding"
 arXiv:1811.08383
 Ji Lin*, Chuang Gan, Song Han
@@ -11,9 +13,8 @@ import torch.nn.functional as F
 
 
 class TemporalShift(nn.Module):
-    def __init__(self, net, n_segment=4, n_div=8, inplace=False):
+    def __init__(self, n_segment=4, n_div=8, inplace=False):
         super(TemporalShift, self).__init__()
-        self.net = net
         self.n_segment = n_segment
         self.fold_div = n_div
         self.inplace = inplace
@@ -22,8 +23,8 @@ class TemporalShift(nn.Module):
         print('=> Using fold div: {}'.format(self.fold_div))
 
     def forward(self, x):
-        x = self.shift(x, self.n_segment, fold_div=self.fold_div, inplace=self.inplace)
-        return self.net(x)
+        return self.shift(x, self.n_segment, fold_div=self.fold_div, inplace=self.inplace)
+
 
     @staticmethod
     def shift(x, n_segment, fold_div=3, inplace=False):

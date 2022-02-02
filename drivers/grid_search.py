@@ -133,7 +133,7 @@ class GridSearch:
             return
 
         print(params)
-        command_str = f'python "{project_dir}/drivers/model_training_pl.py" '
+        command_str = f'python "{project_dir}/drivers/model_training.py" '
         for u in params.keys():
             v = params[u]
             if not isinstance(v, bool):
@@ -197,7 +197,7 @@ def get_hyperparams(dir_: str):
 if __name__ == "__main__":
     # Global variables
     project_dir = "C:/Users/Stanley Hua/projects/temporal_hydronephrosis/"
-    model_type = "Siamese_Baseline"
+    model_type = "Siamese_EfficientNet"
     keep_best_weights = False
 
     timestamp = datetime.now().strftime("%Y-%m-%d")

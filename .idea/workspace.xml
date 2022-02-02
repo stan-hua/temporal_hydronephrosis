@@ -5,126 +5,20 @@
   </component>
   <component name="ChangeListManager">
     <list default="true" id="2e439ead-1cec-4da4-9021-fd0df7818330" name="Changes" comment="1. Added Data Augmentation (via Kornia)&#10;2. Updated models to reflect new changes (e.g. expected batch size of 1), and added average_prediction.py.&#10;3. Updated TSM to perform full shift on a part of the feature maps.&#10;4. Trained final baseline model and saved results to 'final' dir under results dir">
-      <change afterPath="$PROJECT_DIR$/models/average_prediction.py" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/utilities/kornia_augmentation.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/../nephronetwork/1.Models/multitask/train_network_multitask_v2.py" beforeDir="false" afterPath="$PROJECT_DIR$/../nephronetwork/1.Models/multitask/train_network_multitask_v2.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/../nephronetwork/1.Models/multitask/train_network_multitask_v2_bayesopt.py" beforeDir="false" afterPath="$PROJECT_DIR$/../nephronetwork/1.Models/multitask/train_network_multitask_v2_bayesopt.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/../nephronetwork/1.Models/transfer_learning/JigsawPuzzlePytorch-master/JigsawTrain.py" beforeDir="false" afterPath="$PROJECT_DIR$/../nephronetwork/1.Models/transfer_learning/JigsawPuzzlePytorch-master/JigsawTrain.py" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/drivers/grid_search.py" beforeDir="false" afterPath="$PROJECT_DIR$/drivers/grid_search.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/drivers/model_training_pl.py" beforeDir="false" afterPath="$PROJECT_DIR$/drivers/model_training_pl.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/models/baseline_pl.py" beforeDir="false" afterPath="$PROJECT_DIR$/models/baseline_pl.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/drivers/model_training.py" beforeDir="false" afterPath="$PROJECT_DIR$/drivers/model_training.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/drivers/model_training_pl.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/models/average_prediction.py" beforeDir="false" afterPath="$PROJECT_DIR$/models/average_prediction.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/models/baseline.py" beforeDir="false" afterPath="$PROJECT_DIR$/models/baseline.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/models/baseline_pl.py" beforeDir="false" />
       <change beforePath="$PROJECT_DIR$/models/conv_pooling.py" beforeDir="false" afterPath="$PROJECT_DIR$/models/conv_pooling.py" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/models/lstm.py" beforeDir="false" afterPath="$PROJECT_DIR$/models/lstm.py" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/models/tsm.py" beforeDir="false" afterPath="$PROJECT_DIR$/models/tsm.py" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/models/tsm_blocks.py" beforeDir="false" afterPath="$PROJECT_DIR$/models/tsm_blocks.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/results/ConvPooling_grid_search(2021-11-26)/Siamese_ConvPooling_2021-11-26_00-18-38/auc.json" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/results/ConvPooling_grid_search(2021-11-26)/Siamese_ConvPooling_2021-11-26_00-18-38/history.csv" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/results/ConvPooling_grid_search(2021-11-26)/Siamese_ConvPooling_2021-11-26_00-18-38/info.csv" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/results/ConvPooling_grid_search(2021-11-26)/Siamese_ConvPooling_2021-11-26_01-55-56/auc.json" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/results/ConvPooling_grid_search(2021-11-26)/Siamese_ConvPooling_2021-11-26_01-55-56/history.csv" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/results/ConvPooling_grid_search(2021-11-26)/Siamese_ConvPooling_2021-11-26_01-55-56/info.csv" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/results/ConvPooling_grid_search(2021-11-26)/Siamese_ConvPooling_2021-11-26_09-04-59/auc.json" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/results/ConvPooling_grid_search(2021-11-26)/Siamese_ConvPooling_2021-11-26_09-04-59/history.csv" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/results/ConvPooling_grid_search(2021-11-26)/Siamese_ConvPooling_2021-11-26_09-04-59/info.csv" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/results/ConvPooling_grid_search(2021-11-26)/Siamese_ConvPooling_2021-11-26_10-26-31/auc.json" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/results/ConvPooling_grid_search(2021-11-26)/Siamese_ConvPooling_2021-11-26_10-26-31/history.csv" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/results/ConvPooling_grid_search(2021-11-26)/Siamese_ConvPooling_2021-11-26_10-26-31/info.csv" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/results/ConvPooling_grid_search(2021-11-26)/Siamese_ConvPooling_2021-11-26_12-00-25/auc.json" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/results/ConvPooling_grid_search(2021-11-26)/Siamese_ConvPooling_2021-11-26_12-00-25/history.csv" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/results/ConvPooling_grid_search(2021-11-26)/Siamese_ConvPooling_2021-11-26_12-00-25/info.csv" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/results/ConvPooling_grid_search(2021-11-26)/Siamese_ConvPooling_2021-11-26_13-42-48/auc.json" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/results/ConvPooling_grid_search(2021-11-26)/Siamese_ConvPooling_2021-11-26_13-42-48/history.csv" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/results/ConvPooling_grid_search(2021-11-26)/Siamese_ConvPooling_2021-11-26_13-42-48/info.csv" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/results/ConvPooling_grid_search(2021-11-26)/Siamese_ConvPooling_2021-11-26_16-12-02/auc.json" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/results/ConvPooling_grid_search(2021-11-26)/Siamese_ConvPooling_2021-11-26_16-12-02/history.csv" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/results/ConvPooling_grid_search(2021-11-26)/Siamese_ConvPooling_2021-11-26_16-12-02/info.csv" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/results/ConvPooling_grid_search(2021-11-26)/Siamese_ConvPooling_2021-11-26_17-49-18/auc.json" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/results/ConvPooling_grid_search(2021-11-26)/Siamese_ConvPooling_2021-11-26_17-49-18/history.csv" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/results/ConvPooling_grid_search(2021-11-26)/Siamese_ConvPooling_2021-11-26_17-49-18/info.csv" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/results/ConvPooling_grid_search(2021-11-26)/Siamese_ConvPooling_2021-11-26_17-49-18/model-epoch_100-fold1.pth" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/results/ConvPooling_grid_search(2021-11-26)/Siamese_ConvPooling_2021-11-26_20-35-58/auc.json" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/results/ConvPooling_grid_search(2021-11-26)/Siamese_ConvPooling_2021-11-26_20-35-58/history.csv" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/results/ConvPooling_grid_search(2021-11-26)/Siamese_ConvPooling_2021-11-26_20-35-58/info.csv" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/results/ConvPooling_grid_search(2021-11-26)/Siamese_ConvPooling_2021-11-27_00-09-07/auc.json" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/results/ConvPooling_grid_search(2021-11-26)/Siamese_ConvPooling_2021-11-27_00-09-07/history.csv" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/results/ConvPooling_grid_search(2021-11-26)/Siamese_ConvPooling_2021-11-27_00-09-07/info.csv" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/results/ConvPooling_grid_search(2021-11-26)/Siamese_ConvPooling_2021-11-27_02-27-55/auc.json" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/results/ConvPooling_grid_search(2021-11-26)/Siamese_ConvPooling_2021-11-27_02-27-55/history.csv" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/results/ConvPooling_grid_search(2021-11-26)/Siamese_ConvPooling_2021-11-27_02-27-55/info.csv" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/results/ConvPooling_grid_search(2021-11-26)/Siamese_ConvPooling_2021-11-27_02-27-55/model-epoch_100-fold1.pth" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/results/ConvPooling_grid_search(2021-11-26)/Siamese_ConvPooling_2021-11-27_09-29-21/auc.json" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/results/ConvPooling_grid_search(2021-11-26)/Siamese_ConvPooling_2021-11-27_09-29-21/history.csv" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/results/ConvPooling_grid_search(2021-11-26)/Siamese_ConvPooling_2021-11-27_09-29-21/info.csv" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/results/ConvPooling_grid_search(2021-11-26)/Siamese_ConvPooling_2021-11-27_09-29-21/model-epoch_100-fold1.pth" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/results/ConvPooling_grid_search(2021-11-26)/Siamese_ConvPooling_2021-11-27_09-29-21/model-epoch_100-fold2.pth" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/results/ConvPooling_grid_search(2021-11-26)/Siamese_ConvPooling_2021-11-27_15-09-56/auc.json" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/results/ConvPooling_grid_search(2021-11-26)/Siamese_ConvPooling_2021-11-27_15-09-56/history.csv" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/results/ConvPooling_grid_search(2021-11-26)/Siamese_ConvPooling_2021-11-27_15-09-56/info.csv" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/results/ConvPooling_grid_search(2021-11-26)/Siamese_ConvPooling_2021-11-27_15-09-56/model-epoch_100-fold1.pth" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/results/ConvPooling_grid_search(2021-11-26)/Siamese_ConvPooling_2021-11-27_15-09-56/model-epoch_100-fold2.pth" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/results/ConvPooling_grid_search(2021-11-26)/Siamese_ConvPooling_2021-11-27_19-57-54/auc.json" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/results/ConvPooling_grid_search(2021-11-26)/Siamese_ConvPooling_2021-11-27_19-57-54/history.csv" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/results/ConvPooling_grid_search(2021-11-26)/Siamese_ConvPooling_2021-11-27_19-57-54/info.csv" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/results/ConvPooling_grid_search(2021-11-26)/Siamese_ConvPooling_2021-11-27_19-57-54/model-epoch_100-fold1.pth" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/results/ConvPooling_grid_search(2021-11-26)/Siamese_ConvPooling_2021-11-27_19-57-54/model-epoch_100-fold2.pth" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/results/ConvPooling_grid_search(2021-11-26)/Siamese_ConvPooling_2021-11-28_10-46-28/auc.json" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/results/ConvPooling_grid_search(2021-11-26)/Siamese_ConvPooling_2021-11-28_10-46-28/history.csv" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/results/ConvPooling_grid_search(2021-11-26)/Siamese_ConvPooling_2021-11-28_10-46-28/info.csv" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/results/ConvPooling_grid_search(2021-11-26)/Siamese_ConvPooling_2021-11-28_13-33-06/auc.json" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/results/ConvPooling_grid_search(2021-11-26)/Siamese_ConvPooling_2021-11-28_13-33-06/history.csv" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/results/ConvPooling_grid_search(2021-11-26)/Siamese_ConvPooling_2021-11-28_13-33-06/info.csv" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/results/ConvPooling_grid_search(2021-11-26)/grid_search(2021-11-26).csv" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/results/baseline_grid_search(2021-11-22)/Siamese_Baseline_2021-11-22_21-46-01/auc.json" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/results/baseline_grid_search(2021-11-22)/Siamese_Baseline_2021-11-22_21-46-01/history.csv" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/results/baseline_grid_search(2021-11-22)/Siamese_Baseline_2021-11-22_21-46-01/info.csv" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/results/baseline_grid_search(2021-11-22)/Siamese_Baseline_2021-11-22_21-46-01/model-epoch_15.pth" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/results/baseline_grid_search(2021-11-22)/Siamese_Baseline_2021-11-22_21-46-01/model-epoch_20.pth" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/results/baseline_grid_search(2021-11-22)/Siamese_Baseline_2021-11-22_21-46-01/model-epoch_25.pth" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/results/baseline_grid_search(2021-11-22)/Siamese_Baseline_2021-11-22_21-58-41/auc.json" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/results/baseline_grid_search(2021-11-22)/Siamese_Baseline_2021-11-22_21-58-41/history.csv" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/results/baseline_grid_search(2021-11-22)/Siamese_Baseline_2021-11-22_21-58-41/info.csv" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/results/baseline_grid_search(2021-11-22)/Siamese_Baseline_2021-11-22_21-58-41/model-epoch_15.pth" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/results/baseline_grid_search(2021-11-22)/Siamese_Baseline_2021-11-22_21-58-41/model-epoch_20.pth" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/results/baseline_grid_search(2021-11-22)/Siamese_Baseline_2021-11-22_21-58-41/model-epoch_25.pth" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/results/baseline_grid_search(2021-11-22)/Siamese_Baseline_2021-11-22_22-06-45/auc.json" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/results/baseline_grid_search(2021-11-22)/Siamese_Baseline_2021-11-22_22-06-45/history.csv" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/results/baseline_grid_search(2021-11-22)/Siamese_Baseline_2021-11-22_22-06-45/info.csv" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/results/baseline_grid_search(2021-11-22)/Siamese_Baseline_2021-11-22_22-06-45/model-epoch_40.pth" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/results/baseline_grid_search(2021-11-22)/Siamese_Baseline_2021-11-22_22-06-45/model-epoch_45.pth" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/results/baseline_grid_search(2021-11-22)/Siamese_Baseline_2021-11-22_22-06-45/model-epoch_5.pth" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/results/baseline_grid_search(2021-11-22)/Siamese_Baseline_2021-11-22_22-19-03/auc.json" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/results/baseline_grid_search(2021-11-22)/Siamese_Baseline_2021-11-22_22-19-03/history.csv" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/results/baseline_grid_search(2021-11-22)/Siamese_Baseline_2021-11-22_22-19-03/info.csv" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/results/baseline_grid_search(2021-11-22)/Siamese_Baseline_2021-11-22_22-19-03/model-epoch_10.pth" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/results/baseline_grid_search(2021-11-22)/Siamese_Baseline_2021-11-22_22-19-03/model-epoch_15.pth" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/results/baseline_grid_search(2021-11-22)/Siamese_Baseline_2021-11-22_22-27-24/auc.json" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/results/baseline_grid_search(2021-11-22)/Siamese_Baseline_2021-11-22_22-27-24/history.csv" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/results/baseline_grid_search(2021-11-22)/Siamese_Baseline_2021-11-22_22-27-24/info.csv" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/results/baseline_grid_search(2021-11-22)/Siamese_Baseline_2021-11-22_22-27-24/model-epoch_20.pth" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/results/baseline_grid_search(2021-11-22)/Siamese_Baseline_2021-11-22_22-27-24/model-epoch_25.pth" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/results/baseline_grid_search(2021-11-22)/Siamese_Baseline_2021-11-22_22-27-24/model-epoch_30.pth" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/results/baseline_grid_search(2021-11-22)/Siamese_Baseline_2021-11-22_22-38-31/auc.json" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/results/baseline_grid_search(2021-11-22)/Siamese_Baseline_2021-11-22_22-38-31/history.csv" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/results/baseline_grid_search(2021-11-22)/Siamese_Baseline_2021-11-22_22-38-31/info.csv" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/results/baseline_grid_search(2021-11-22)/Siamese_Baseline_2021-11-22_22-38-31/model-epoch_60.pth" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/results/baseline_grid_search(2021-11-22)/Siamese_Baseline_2021-11-22_22-38-31/model-epoch_65.pth" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/results/baseline_grid_search(2021-11-22)/Siamese_Baseline_2021-11-22_22-59-32/auc.json" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/results/baseline_grid_search(2021-11-22)/Siamese_Baseline_2021-11-22_22-59-32/history.csv" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/results/baseline_grid_search(2021-11-22)/Siamese_Baseline_2021-11-22_22-59-32/info.csv" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/results/baseline_grid_search(2021-11-22)/Siamese_Baseline_2021-11-22_22-59-32/model-epoch_10.pth" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/results/baseline_grid_search(2021-11-22)/Siamese_Baseline_2021-11-22_22-59-32/model-epoch_15.pth" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/results/baseline_grid_search(2021-11-22)/Siamese_Baseline_2021-11-22_22-59-32/model-epoch_20.pth" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/results/baseline_grid_search(2021-11-22)/Siamese_Baseline_2021-11-22_23-09-06/auc.json" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/results/baseline_grid_search(2021-11-22)/Siamese_Baseline_2021-11-22_23-09-06/history.csv" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/results/baseline_grid_search(2021-11-22)/Siamese_Baseline_2021-11-22_23-09-06/info.csv" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/results/baseline_grid_search(2021-11-22)/Siamese_Baseline_2021-11-22_23-09-06/model-epoch_30.pth" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/results/baseline_grid_search(2021-11-22)/Siamese_Baseline_2021-11-22_23-09-06/model-epoch_35.pth" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/results/baseline_grid_search(2021-11-22)/Siamese_Baseline_2021-11-22_23-09-06/model-epoch_5.pth" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/results/baseline_grid_search(2021-11-22)/Siamese_Baseline_2021-11-22_23-22-53/auc.json" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/results/baseline_grid_search(2021-11-22)/Siamese_Baseline_2021-11-22_23-22-53/history.csv" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/results/baseline_grid_search(2021-11-22)/Siamese_Baseline_2021-11-22_23-22-53/info.csv" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/results/baseline_grid_search(2021-11-22)/Siamese_Baseline_2021-11-22_23-22-53/model-epoch_10.pth" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/results/baseline_grid_search(2021-11-22)/Siamese_Baseline_2021-11-22_23-22-53/model-epoch_100.pth" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/results/baseline_grid_search(2021-11-22)/Siamese_Baseline_2021-11-22_23-22-53/model-epoch_15.pth" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/results/baseline_grid_search(2021-11-22)/grid_search(2021-11-22).csv" beforeDir="false" />
       <change beforePath="$PROJECT_DIR$/utilities/data_visualizer.py" beforeDir="false" afterPath="$PROJECT_DIR$/utilities/data_visualizer.py" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/utilities/dataset_prep.py" beforeDir="false" afterPath="$PROJECT_DIR$/utilities/dataset_prep.py" afterDir="false" />
     </list>
@@ -219,7 +113,28 @@
       <option name="INPUT_FILE" value="" />
       <method v="2" />
     </configuration>
-    <configuration name="baseline_pl" type="PythonConfigurationType" factoryName="Python" temporary="true" nameIsGenerated="true">
+    <configuration name="baseline" type="PythonConfigurationType" factoryName="Python" temporary="true" nameIsGenerated="true">
+      <module name="temporal_hydronephrosis" />
+      <option name="INTERPRETER_OPTIONS" value="" />
+      <option name="PARENT_ENVS" value="true" />
+      <envs>
+        <env name="PYTHONUNBUFFERED" value="1" />
+      </envs>
+      <option name="SDK_HOME" value="C:\Users\Stanley Hua\Anaconda3\envs\DL\python.exe" />
+      <option name="WORKING_DIRECTORY" value="$PROJECT_DIR$/.." />
+      <option name="IS_MODULE_SDK" value="true" />
+      <option name="ADD_CONTENT_ROOTS" value="true" />
+      <option name="ADD_SOURCE_ROOTS" value="true" />
+      <option name="SCRIPT_NAME" value="C:\Users\Stanley Hua\projects\temporal_hydronephrosis\models\baseline.py" />
+      <option name="PARAMETERS" value="" />
+      <option name="SHOW_COMMAND_LINE" value="true" />
+      <option name="EMULATE_TERMINAL" value="false" />
+      <option name="MODULE_MODE" value="false" />
+      <option name="REDIRECT_INPUT" value="false" />
+      <option name="INPUT_FILE" value="" />
+      <method v="2" />
+    </configuration>
+    <configuration name="baseline_efficientnet" type="PythonConfigurationType" factoryName="Python" temporary="true" nameIsGenerated="true">
       <module name="temporal_hydronephrosis" />
       <option name="INTERPRETER_OPTIONS" value="" />
       <option name="PARENT_ENVS" value="true" />
@@ -228,7 +143,7 @@
       <option name="IS_MODULE_SDK" value="true" />
       <option name="ADD_CONTENT_ROOTS" value="true" />
       <option name="ADD_SOURCE_ROOTS" value="true" />
-      <option name="SCRIPT_NAME" value="$PROJECT_DIR$/models/baseline_pl.py" />
+      <option name="SCRIPT_NAME" value="$PROJECT_DIR$/models/baseline_efficientnet.py" />
       <option name="PARAMETERS" value="" />
       <option name="SHOW_COMMAND_LINE" value="true" />
       <option name="EMULATE_TERMINAL" value="false" />
@@ -241,6 +156,9 @@
       <module name="temporal_hydronephrosis" />
       <option name="INTERPRETER_OPTIONS" value="" />
       <option name="PARENT_ENVS" value="true" />
+      <envs>
+        <env name="PYTHONUNBUFFERED" value="1" />
+      </envs>
       <option name="SDK_HOME" value="C:\Users\Stanley Hua\Anaconda3\envs\DL\python.exe" />
       <option name="WORKING_DIRECTORY" value="$PROJECT_DIR$/.." />
       <option name="IS_MODULE_SDK" value="true" />
@@ -276,27 +194,6 @@
       <option name="INPUT_FILE" value="" />
       <method v="2" />
     </configuration>
-    <configuration name="grid_search" type="PythonConfigurationType" factoryName="Python" temporary="true" nameIsGenerated="true">
-      <module name="temporal_hydronephrosis" />
-      <option name="INTERPRETER_OPTIONS" value="" />
-      <option name="PARENT_ENVS" value="true" />
-      <envs>
-        <env name="PYTHONUNBUFFERED" value="1" />
-      </envs>
-      <option name="SDK_HOME" value="C:\Users\Stanley Hua\Anaconda3\envs\DL\python.exe" />
-      <option name="WORKING_DIRECTORY" value="$PROJECT_DIR$/.." />
-      <option name="IS_MODULE_SDK" value="true" />
-      <option name="ADD_CONTENT_ROOTS" value="true" />
-      <option name="ADD_SOURCE_ROOTS" value="true" />
-      <option name="SCRIPT_NAME" value="$PROJECT_DIR$/drivers/grid_search.py" />
-      <option name="PARAMETERS" value="" />
-      <option name="SHOW_COMMAND_LINE" value="true" />
-      <option name="EMULATE_TERMINAL" value="false" />
-      <option name="MODULE_MODE" value="false" />
-      <option name="REDIRECT_INPUT" value="false" />
-      <option name="INPUT_FILE" value="" />
-      <method v="2" />
-    </configuration>
     <configuration name="model_training" type="PythonConfigurationType" factoryName="Python">
       <module name="temporal_hydronephrosis" />
       <option name="INTERPRETER_OPTIONS" value="" />
@@ -322,6 +219,24 @@
       <module name="temporal_hydronephrosis" />
       <option name="INTERPRETER_OPTIONS" value="" />
       <option name="PARENT_ENVS" value="true" />
+      <option name="SDK_HOME" value="C:\Users\Stanley Hua\Anaconda3\envs\DL\python.exe" />
+      <option name="WORKING_DIRECTORY" value="$PROJECT_DIR$/.." />
+      <option name="IS_MODULE_SDK" value="true" />
+      <option name="ADD_CONTENT_ROOTS" value="true" />
+      <option name="ADD_SOURCE_ROOTS" value="true" />
+      <option name="SCRIPT_NAME" value="C:\Users\Stanley Hua\projects\temporal_hydronephrosis\drivers\model_training.py" />
+      <option name="PARAMETERS" value="" />
+      <option name="SHOW_COMMAND_LINE" value="true" />
+      <option name="EMULATE_TERMINAL" value="false" />
+      <option name="MODULE_MODE" value="false" />
+      <option name="REDIRECT_INPUT" value="false" />
+      <option name="INPUT_FILE" value="" />
+      <method v="2" />
+    </configuration>
+    <configuration name="model_training" type="PythonConfigurationType" factoryName="Python" temporary="true" nameIsGenerated="true">
+      <module name="temporal_hydronephrosis" />
+      <option name="INTERPRETER_OPTIONS" value="" />
+      <option name="PARENT_ENVS" value="true" />
       <envs>
         <env name="PYTHONUNBUFFERED" value="1" />
       </envs>
@@ -331,24 +246,6 @@
       <option name="ADD_CONTENT_ROOTS" value="true" />
       <option name="ADD_SOURCE_ROOTS" value="true" />
       <option name="SCRIPT_NAME" value="C:\Users\Stanley Hua\projects\temporal_hydronephrosis\model_training.py" />
-      <option name="PARAMETERS" value="" />
-      <option name="SHOW_COMMAND_LINE" value="true" />
-      <option name="EMULATE_TERMINAL" value="false" />
-      <option name="MODULE_MODE" value="false" />
-      <option name="REDIRECT_INPUT" value="false" />
-      <option name="INPUT_FILE" value="" />
-      <method v="2" />
-    </configuration>
-    <configuration name="model_training_pl" type="PythonConfigurationType" factoryName="Python" temporary="true" nameIsGenerated="true">
-      <module name="temporal_hydronephrosis" />
-      <option name="INTERPRETER_OPTIONS" value="" />
-      <option name="PARENT_ENVS" value="true" />
-      <option name="SDK_HOME" value="C:\Users\Stanley Hua\Anaconda3\envs\DL\python.exe" />
-      <option name="WORKING_DIRECTORY" value="$PROJECT_DIR$/.." />
-      <option name="IS_MODULE_SDK" value="true" />
-      <option name="ADD_CONTENT_ROOTS" value="true" />
-      <option name="ADD_SOURCE_ROOTS" value="true" />
-      <option name="SCRIPT_NAME" value="$PROJECT_DIR$/drivers/model_training_pl.py" />
       <option name="PARAMETERS" value="" />
       <option name="SHOW_COMMAND_LINE" value="true" />
       <option name="EMULATE_TERMINAL" value="false" />
@@ -383,17 +280,17 @@
       <item itemvalue="Python.model_training" />
       <item itemvalue="Python.model_training_pl" />
       <item itemvalue="Python.dataset_prep" />
-      <item itemvalue="Python.grid_search" />
       <item itemvalue="Python.data_visualizer" />
       <item itemvalue="Python.baseline_pl" />
+      <item itemvalue="Python.baseline_efficientnet" />
     </list>
     <recent_temporary>
       <list>
         <item itemvalue="Python.model_training_pl" />
+        <item itemvalue="Python.baseline_efficientnet" />
         <item itemvalue="Python.baseline_pl" />
         <item itemvalue="Python.data_visualizer" />
         <item itemvalue="Python.dataset_prep" />
-        <item itemvalue="Python.grid_search" />
       </list>
     </recent_temporary>
   </component>
@@ -497,7 +394,14 @@
       <option name="project" value="LOCAL" />
       <updated>1643070670871</updated>
     </task>
-    <option name="localTasksCounter" value="14" />
+    <task id="LOCAL-00014" summary="1. Added Data Augmentation (via Kornia)&#10;2. Updated models to reflect new changes (e.g. expected batch size of 1), and added average_prediction.py.&#10;3. Updated TSM to perform full shift on a part of the feature maps.&#10;4. Trained final baseline model and saved results to 'final' dir under results dir">
+      <created>1643490426347</created>
+      <option name="number" value="00014" />
+      <option name="presentableId" value="LOCAL-00014" />
+      <option name="project" value="LOCAL" />
+      <updated>1643490426347</updated>
+    </task>
+    <option name="localTasksCounter" value="15" />
     <servers />
   </component>
   <component name="Vcs.Log.Tabs.Properties">
@@ -545,9 +449,9 @@
     <breakpoint-manager>
       <breakpoints>
         <line-breakpoint enabled="true" suspend="THREAD" type="python-line">
-          <url>file://$PROJECT_DIR$/models/baseline_pl.py</url>
-          <line>247</line>
-          <option name="timeStamp" value="1" />
+          <url>file://$PROJECT_DIR$/models/baseline.py</url>
+          <line>130</line>
+          <option name="timeStamp" value="4" />
         </line-breakpoint>
       </breakpoints>
     </breakpoint-manager>

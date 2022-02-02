@@ -6,7 +6,7 @@ import numpy as np
 import torch
 from torch import nn
 
-from models.baseline_pl import SiamNet
+from models.baseline import SiamNet
 
 
 # noinspection PyTypeChecker,PyUnboundLocalVariable
@@ -19,7 +19,10 @@ class SiamNetConvPooling(SiamNet):
             - data is fed in batch sizes of 1
             - data['img'] is of the form (1, T, C, H, W), where T=time, V=view (sagittal, transverse)
         """
-        x = data['img'][0]
+        x = data['img']
+
+        if len(x.size()) == 5:
+            x = x[0]
 
         T, C, H, W = x.size()
         x = x.transpose(0, 1)
@@ -66,7 +69,10 @@ class SiamNetConvPooling(SiamNet):
 
     @torch.no_grad()
     def forward_embed(self, data):
-        x = data['img'][0]
+        x = data['img']
+
+        if len(x.size()) == 5:
+            x = x[0]
 
         T, C, H, W = x.size()
         x = x.transpose(0, 1)

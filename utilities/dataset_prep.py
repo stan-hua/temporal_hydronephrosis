@@ -18,6 +18,7 @@ from skimage.transform import resize
 from sklearn.model_selection import StratifiedKFold, StratifiedShuffleSplit
 from sklearn.utils import shuffle
 from torch.utils.data import DataLoader
+from torchvision import transforms
 
 
 # Main data module
@@ -158,12 +159,15 @@ class KidneyDataset(torch.utils.data.Dataset):
         self.image_dict, self.label_dict, self.cov_dict, self.study_ids = data_dicts
         self.include_cov = include_cov
 
+        # TODO: Remove
+        self.transforms = transforms.Resize(260)
+
     def __getitem__(self, index):
         id_ = list(self.study_ids)[index]
         img, y, cov = self.image_dict[id_], self.label_dict[id_], self.cov_dict[id_]
 
         id_split = id_.split("_")
-        data = {'img': torch.FloatTensor(img)}
+        data = {'img': self.transforms(torch.FloatTensor(img))}     # TODO: Remove
         data['img'] = torch.div(data['img'], 255)
 
         if self.include_cov:
