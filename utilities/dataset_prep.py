@@ -18,7 +18,6 @@ from skimage.transform import resize
 from sklearn.model_selection import StratifiedKFold, StratifiedShuffleSplit
 from sklearn.utils import shuffle
 from torch.utils.data import DataLoader
-from torchvision import transforms
 
 
 # Main data module
@@ -28,6 +27,7 @@ class KidneyDataModule(pl.LightningDataModule):
         self.args = args
         self.train_dataloader_params = dataloader_params
         self.val_dataloader_params = dataloader_params.copy()
+        self.val_dataloader_params['batch_size'] = 1
         self.val_dataloader_params['shuffle'] = False
 
         self.SEED = 42
@@ -39,7 +39,7 @@ class KidneyDataModule(pl.LightningDataModule):
         self.train_img_dict, self.train_label_dict, self.train_cov_dict, self.train_study_ids = None, None, None, None
         self._train_val_idx_generator = None
 
-        self.test_set, self.st_test_set, self.stan_test_set, self.ui_test_set = None, None, None, None
+        self.test_set, self.st_test_set, self.stan_test_set, self.ui_test_set, self.chop_test_set = None, None, None, None, None
 
     def setup(self, stage='fit'):
         args = self.args
@@ -84,17 +84,26 @@ class KidneyDataModule(pl.LightningDataModule):
             # Silent Trial
             st_test_dict = load_test_dataset(args.json_st_test, data_dir=args.data_dir)
             self.st_test_set = get_data_dicts(st_test_dict, data_dir=args.data_dir, silent_trial=True,
+                                              seq=not args.single_visit,
                                               last_visit_only=args.test_last_visit)
 
             # Stanford
             stan_test_dict = load_test_dataset(args.json_stan_test, data_dir=args.data_dir)
             self.stan_test_set = get_data_dicts(stan_test_dict, data_dir=args.data_dir,
+                                                seq=not args.single_visit,
                                                 last_visit_only=args.test_last_visit)
 
             # UIowa
             ui_test_dict = load_test_dataset(args.json_ui_test, data_dir=args.data_dir)
             self.ui_test_set = get_data_dicts(ui_test_dict, data_dir=args.data_dir,
+                                              seq=not args.single_visit,
                                               last_visit_only=args.test_last_visit)
+
+            # CHOP
+            chop_test_dict = load_test_dataset(args.json_chop_test, data_dir=args.data_dir)
+            self.chop_test_set = get_data_dicts(chop_test_dict, data_dir=args.data_dir,
+                                                seq=not args.single_visit,
+                                                last_visit_only=args.test_last_visit)
 
     def train_dataloader(self):
         train_idx, _ = self._train_val_idx_generator[self.fold]
@@ -152,6 +161,11 @@ class KidneyDataModule(pl.LightningDataModule):
         ui_test_generator = DataLoader(ui_test_set, **self.val_dataloader_params)
         return ui_test_generator
 
+    def chop_test_dataloader(self):
+        chop_test_set = KidneyDataset(data_dicts=self.chop_test_set, include_cov=self.args.include_cov)
+        chop_test_generator = DataLoader(chop_test_set, **self.val_dataloader_params)
+        return chop_test_generator
+
 
 # ==DATA LOADING==:
 class KidneyDataset(torch.utils.data.Dataset):
@@ -159,16 +173,12 @@ class KidneyDataset(torch.utils.data.Dataset):
         self.image_dict, self.label_dict, self.cov_dict, self.study_ids = data_dicts
         self.include_cov = include_cov
 
-        # TODO: Remove
-        self.transforms = transforms.Resize(260)
-
     def __getitem__(self, index):
         id_ = list(self.study_ids)[index]
         img, y, cov = self.image_dict[id_], self.label_dict[id_], self.cov_dict[id_]
 
         id_split = id_.split("_")
-        data = {'img': self.transforms(torch.FloatTensor(img))}     # TODO: Remove
-        data['img'] = torch.div(data['img'], 255)
+        data = {'img': torch.FloatTensor(img)}
 
         if self.include_cov:
 
@@ -278,6 +288,8 @@ def get_data_dicts(in_dict, data_dir, update_num=None, silent_trial=False, last_
     label_dict = dict()
     cov_dict = dict()
 
+    invalid_age = set()
+
     for study_id in in_dict.keys():
         try:
             sides = np.setdiff1d(list(in_dict[study_id].keys()), ['BL_date', 'Sex'])
@@ -315,12 +327,6 @@ def get_data_dicts(in_dict, data_dir, update_num=None, silent_trial=False, last_
                     if surgery not in [0, 1]:
                         print(f"Invalid surgery value! {study_id} will be skipped.")
                         continue
-                    if age_wks < 0:
-                        print(f"Negative age value! {study_id} will be skipped.")
-                        continue
-                    elif age_wks > 52 * 10:
-                        print(f"Patient over the age of 10! {study_id} will be skipped.")
-                        continue
 
                     # Initialize
                     if dict_key not in img_dict:
@@ -349,6 +355,9 @@ def get_data_dicts(in_dict, data_dir, update_num=None, silent_trial=False, last_
             print(e)
         except AssertionError as f:
             print(f)
+
+    if len(invalid_age) > 0:
+        print(f"{len(invalid_age)} patients over the age of 10 skipped!")
 
     ids = list(img_dict.keys())
     return img_dict, label_dict, cov_dict, ids
@@ -589,7 +598,7 @@ def process_input_image(img_file, crop=None, random_crop=None):
     """
     fit_img = np.array(Image.open(img_file).convert('L'))
     if fit_img.shape[0] != 256 or fit_img.shape[1] != 256:
-        print(img_file)
+        # print(img_file)
         fit_img = special_ST_preprocessing(img_file)
 
     return fit_img

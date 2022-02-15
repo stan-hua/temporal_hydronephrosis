@@ -4,23 +4,21 @@
     <option name="SCOPE_TYPE" value="3" />
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="2e439ead-1cec-4da4-9021-fd0df7818330" name="Changes" comment="1. Added Data Augmentation (via Kornia)&#10;2. Updated models to reflect new changes (e.g. expected batch size of 1), and added average_prediction.py.&#10;3. Updated TSM to perform full shift on a part of the feature maps.&#10;4. Trained final baseline model and saved results to 'final' dir under results dir">
-      <change beforePath="$PROJECT_DIR$/../nephronetwork/1.Models/multitask/train_network_multitask_v2.py" beforeDir="false" afterPath="$PROJECT_DIR$/../nephronetwork/1.Models/multitask/train_network_multitask_v2.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/../nephronetwork/1.Models/multitask/train_network_multitask_v2_bayesopt.py" beforeDir="false" afterPath="$PROJECT_DIR$/../nephronetwork/1.Models/multitask/train_network_multitask_v2_bayesopt.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/../nephronetwork/1.Models/transfer_learning/JigsawPuzzlePytorch-master/JigsawTrain.py" beforeDir="false" afterPath="$PROJECT_DIR$/../nephronetwork/1.Models/transfer_learning/JigsawPuzzlePytorch-master/JigsawTrain.py" afterDir="false" />
+    <list default="true" id="2e439ead-1cec-4da4-9021-fd0df7818330" name="Changes" comment="Add experimental Siamese EfficientNet baseline. Renamed pl files to replace original (model_training_pl.py -&gt; model_training.py, baseline_pl.py -&gt; baseline.py). Updated all models (modified TSM).&#10;&#10;Current model_training.py working with Siamese EfficientNet (resized images to 260x260 in KidneyDataset in dataset_prep.py)">
+      <change afterPath="$PROJECT_DIR$/utilities/bootstrap_ci.py" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/drivers/grid_search.py" beforeDir="false" afterPath="$PROJECT_DIR$/drivers/grid_search.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/drivers/model_training.py" beforeDir="false" afterPath="$PROJECT_DIR$/drivers/model_training.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/drivers/model_training_pl.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/drivers/__init__.py" beforeDir="false" afterPath="$PROJECT_DIR$/op/__init__.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/drivers/grid_search.py" beforeDir="false" afterPath="$PROJECT_DIR$/op/grid_search.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/drivers/model_training.py" beforeDir="false" afterPath="$PROJECT_DIR$/op/model_training.py" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/models/average_prediction.py" beforeDir="false" afterPath="$PROJECT_DIR$/models/average_prediction.py" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/models/baseline.py" beforeDir="false" afterPath="$PROJECT_DIR$/models/baseline.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/models/baseline_pl.py" beforeDir="false" />
       <change beforePath="$PROJECT_DIR$/models/conv_pooling.py" beforeDir="false" afterPath="$PROJECT_DIR$/models/conv_pooling.py" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/models/lstm.py" beforeDir="false" afterPath="$PROJECT_DIR$/models/lstm.py" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/models/tsm.py" beforeDir="false" afterPath="$PROJECT_DIR$/models/tsm.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/models/tsm_blocks.py" beforeDir="false" afterPath="$PROJECT_DIR$/models/tsm_blocks.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/utilities/custom_logger.py" beforeDir="false" afterPath="$PROJECT_DIR$/utilities/custom_logger.py" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/utilities/data_visualizer.py" beforeDir="false" afterPath="$PROJECT_DIR$/utilities/data_visualizer.py" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/utilities/dataset_prep.py" beforeDir="false" afterPath="$PROJECT_DIR$/utilities/dataset_prep.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/utilities/kornia_augmentation.py" beforeDir="false" afterPath="$PROJECT_DIR$/utilities/kornia_augmentation.py" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -91,7 +89,7 @@
       <recent name="C:\Users\Stanley Hua\projects\temporal_hydronephrosis" />
     </key>
   </component>
-  <component name="RunManager" selected="Python.model_training_pl">
+  <component name="RunManager" selected="Python.bootstrap_ci">
     <configuration default="true" type="PythonConfigurationType" factoryName="Python">
       <module name="temporal_hydronephrosis" />
       <option name="INTERPRETER_OPTIONS" value="" />
@@ -113,7 +111,7 @@
       <option name="INPUT_FILE" value="" />
       <method v="2" />
     </configuration>
-    <configuration name="baseline" type="PythonConfigurationType" factoryName="Python" temporary="true" nameIsGenerated="true">
+    <configuration name="average_prediction" type="PythonConfigurationType" factoryName="Python" temporary="true" nameIsGenerated="true">
       <module name="temporal_hydronephrosis" />
       <option name="INTERPRETER_OPTIONS" value="" />
       <option name="PARENT_ENVS" value="true" />
@@ -125,7 +123,7 @@
       <option name="IS_MODULE_SDK" value="true" />
       <option name="ADD_CONTENT_ROOTS" value="true" />
       <option name="ADD_SOURCE_ROOTS" value="true" />
-      <option name="SCRIPT_NAME" value="C:\Users\Stanley Hua\projects\temporal_hydronephrosis\models\baseline.py" />
+      <option name="SCRIPT_NAME" value="$PROJECT_DIR$/models/average_prediction.py" />
       <option name="PARAMETERS" value="" />
       <option name="SHOW_COMMAND_LINE" value="true" />
       <option name="EMULATE_TERMINAL" value="false" />
@@ -134,16 +132,19 @@
       <option name="INPUT_FILE" value="" />
       <method v="2" />
     </configuration>
-    <configuration name="baseline_efficientnet" type="PythonConfigurationType" factoryName="Python" temporary="true" nameIsGenerated="true">
+    <configuration name="bootstrap_ci" type="PythonConfigurationType" factoryName="Python" temporary="true" nameIsGenerated="true">
       <module name="temporal_hydronephrosis" />
       <option name="INTERPRETER_OPTIONS" value="" />
       <option name="PARENT_ENVS" value="true" />
+      <envs>
+        <env name="PYTHONUNBUFFERED" value="1" />
+      </envs>
       <option name="SDK_HOME" value="C:\Users\Stanley Hua\Anaconda3\envs\DL\python.exe" />
       <option name="WORKING_DIRECTORY" value="$PROJECT_DIR$/.." />
       <option name="IS_MODULE_SDK" value="true" />
       <option name="ADD_CONTENT_ROOTS" value="true" />
       <option name="ADD_SOURCE_ROOTS" value="true" />
-      <option name="SCRIPT_NAME" value="$PROJECT_DIR$/models/baseline_efficientnet.py" />
+      <option name="SCRIPT_NAME" value="$PROJECT_DIR$/utilities/bootstrap_ci.py" />
       <option name="PARAMETERS" value="" />
       <option name="SHOW_COMMAND_LINE" value="true" />
       <option name="EMULATE_TERMINAL" value="false" />
@@ -173,7 +174,7 @@
       <option name="INPUT_FILE" value="" />
       <method v="2" />
     </configuration>
-    <configuration name="dataset_prep" type="PythonConfigurationType" factoryName="Python" temporary="true" nameIsGenerated="true">
+    <configuration name="grid_search" type="PythonConfigurationType" factoryName="Python" temporary="true" nameIsGenerated="true">
       <module name="temporal_hydronephrosis" />
       <option name="INTERPRETER_OPTIONS" value="" />
       <option name="PARENT_ENVS" value="true" />
@@ -185,7 +186,7 @@
       <option name="IS_MODULE_SDK" value="true" />
       <option name="ADD_CONTENT_ROOTS" value="true" />
       <option name="ADD_SOURCE_ROOTS" value="true" />
-      <option name="SCRIPT_NAME" value="$PROJECT_DIR$/utilities/dataset_prep.py" />
+      <option name="SCRIPT_NAME" value="$PROJECT_DIR$/op/grid_search.py" />
       <option name="PARAMETERS" value="" />
       <option name="SHOW_COMMAND_LINE" value="true" />
       <option name="EMULATE_TERMINAL" value="false" />
@@ -194,7 +195,7 @@
       <option name="INPUT_FILE" value="" />
       <method v="2" />
     </configuration>
-    <configuration name="model_training" type="PythonConfigurationType" factoryName="Python">
+    <configuration name="model_training" type="PythonConfigurationType" factoryName="Python" temporary="true" nameIsGenerated="true">
       <module name="temporal_hydronephrosis" />
       <option name="INTERPRETER_OPTIONS" value="" />
       <option name="PARENT_ENVS" value="true" />
@@ -202,13 +203,13 @@
         <env name="PYTHONUNBUFFERED" value="1" />
       </envs>
       <option name="SDK_HOME" value="C:\Users\Stanley Hua\Anaconda3\envs\DL\python.exe" />
-      <option name="WORKING_DIRECTORY" value="$PROJECT_DIR$" />
-      <option name="IS_MODULE_SDK" value="false" />
+      <option name="WORKING_DIRECTORY" value="$PROJECT_DIR$/.." />
+      <option name="IS_MODULE_SDK" value="true" />
       <option name="ADD_CONTENT_ROOTS" value="true" />
       <option name="ADD_SOURCE_ROOTS" value="true" />
-      <option name="SCRIPT_NAME" value="C:\Users\Stanley Hua\projects\temporal_hydronephrosis\drivers\model_training.py" />
+      <option name="SCRIPT_NAME" value="$PROJECT_DIR$/op/model_training.py" />
       <option name="PARAMETERS" value="" />
-      <option name="SHOW_COMMAND_LINE" value="false" />
+      <option name="SHOW_COMMAND_LINE" value="true" />
       <option name="EMULATE_TERMINAL" value="false" />
       <option name="MODULE_MODE" value="false" />
       <option name="REDIRECT_INPUT" value="false" />
@@ -277,20 +278,19 @@
     </configuration>
     <list>
       <item itemvalue="Python.temporal_hydronephrosis" />
+      <item itemvalue="Python.grid_search" />
       <item itemvalue="Python.model_training" />
-      <item itemvalue="Python.model_training_pl" />
-      <item itemvalue="Python.dataset_prep" />
+      <item itemvalue="Python.average_prediction" />
+      <item itemvalue="Python.bootstrap_ci" />
       <item itemvalue="Python.data_visualizer" />
-      <item itemvalue="Python.baseline_pl" />
-      <item itemvalue="Python.baseline_efficientnet" />
     </list>
     <recent_temporary>
       <list>
-        <item itemvalue="Python.model_training_pl" />
-        <item itemvalue="Python.baseline_efficientnet" />
-        <item itemvalue="Python.baseline_pl" />
+        <item itemvalue="Python.bootstrap_ci" />
+        <item itemvalue="Python.model_training" />
         <item itemvalue="Python.data_visualizer" />
-        <item itemvalue="Python.dataset_prep" />
+        <item itemvalue="Python.average_prediction" />
+        <item itemvalue="Python.grid_search" />
       </list>
     </recent_temporary>
   </component>
@@ -401,7 +401,14 @@
       <option name="project" value="LOCAL" />
       <updated>1643490426347</updated>
     </task>
-    <option name="localTasksCounter" value="15" />
+    <task id="LOCAL-00015" summary="Add experimental Siamese EfficientNet baseline. Renamed pl files to replace original (model_training_pl.py -&gt; model_training.py, baseline_pl.py -&gt; baseline.py). Updated all models (modified TSM).&#10;&#10;Current model_training.py working with Siamese EfficientNet (resized images to 260x260 in KidneyDataset in dataset_prep.py)">
+      <created>1643772122963</created>
+      <option name="number" value="00015" />
+      <option name="presentableId" value="LOCAL-00015" />
+      <option name="project" value="LOCAL" />
+      <updated>1643772122963</updated>
+    </task>
+    <option name="localTasksCounter" value="16" />
     <servers />
   </component>
   <component name="Vcs.Log.Tabs.Properties">
@@ -443,15 +450,32 @@
     <MESSAGE value="All models are now compatible with PyTorch Lightning, and grid_search.py has been updated to account for new PL logging." />
     <MESSAGE value="1. Created driver folder for model training and hyperparameter grid search.&#10;2. Added ability to extract embeddings for baseline_pl.py&#10;3. Added UMAP plotting inn data_visualizer.py&#10;4. Began adding Kornia augmentation to dataset_prep.py for batched augmentation." />
     <MESSAGE value="1. Added Data Augmentation (via Kornia)&#10;2. Updated models to reflect new changes (e.g. expected batch size of 1), and added average_prediction.py.&#10;3. Updated TSM to perform full shift on a part of the feature maps.&#10;4. Trained final baseline model and saved results to 'final' dir under results dir" />
-    <option name="LAST_COMMIT_MESSAGE" value="1. Added Data Augmentation (via Kornia)&#10;2. Updated models to reflect new changes (e.g. expected batch size of 1), and added average_prediction.py.&#10;3. Updated TSM to perform full shift on a part of the feature maps.&#10;4. Trained final baseline model and saved results to 'final' dir under results dir" />
+    <MESSAGE value="Add experimental Siamese EfficientNet baseline. Renamed pl files to replace original (model_training_pl.py -&gt; model_training.py, baseline_pl.py -&gt; baseline.py). Updated all models (modified TSM)" />
+    <MESSAGE value="Add experimental Siamese EfficientNet baseline. Renamed pl files to replace original (model_training_pl.py -&gt; model_training.py, baseline_pl.py -&gt; baseline.py). Updated all models (modified TSM).&#10;&#10;Current model_training.py working with Siamese EfficientNet (resized images to 260x260 in KidneyDataset in dataset_prep.py)" />
+    <option name="LAST_COMMIT_MESSAGE" value="Add experimental Siamese EfficientNet baseline. Renamed pl files to replace original (model_training_pl.py -&gt; model_training.py, baseline_pl.py -&gt; baseline.py). Updated all models (modified TSM).&#10;&#10;Current model_training.py working with Siamese EfficientNet (resized images to 260x260 in KidneyDataset in dataset_prep.py)" />
   </component>
   <component name="XDebuggerManager">
     <breakpoint-manager>
       <breakpoints>
         <line-breakpoint enabled="true" suspend="THREAD" type="python-line">
           <url>file://$PROJECT_DIR$/models/baseline.py</url>
-          <line>130</line>
+          <line>196</line>
           <option name="timeStamp" value="4" />
+        </line-breakpoint>
+        <line-breakpoint enabled="true" suspend="THREAD" type="python-line">
+          <url>file://$PROJECT_DIR$/utilities/data_visualizer.py</url>
+          <line>139</line>
+          <option name="timeStamp" value="6" />
+        </line-breakpoint>
+        <line-breakpoint enabled="true" suspend="THREAD" type="python-line">
+          <url>file://$PROJECT_DIR$/utilities/data_visualizer.py</url>
+          <line>140</line>
+          <option name="timeStamp" value="7" />
+        </line-breakpoint>
+        <line-breakpoint enabled="true" suspend="THREAD" type="python-line">
+          <url>file://$PROJECT_DIR$/utilities/data_visualizer.py</url>
+          <line>141</line>
+          <option name="timeStamp" value="8" />
         </line-breakpoint>
       </breakpoints>
     </breakpoint-manager>

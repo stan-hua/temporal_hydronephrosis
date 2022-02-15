@@ -19,4 +19,10 @@ class FriendlyCSVLogger(CSVLogger):
             df = pd.read_csv(metrics_path)
             df = df.drop(columns=["step"])
             df = df.groupby(by=['epoch'], as_index=False).apply(lambda df_: _collapse_epoch(df_))
+
+            for col in df.columns.tolist():
+                if "_" not in col or "loss" in col:
+                    continue
+                df[col] = (df[col] * 100).round(decimals=2)
+
             df.to_csv(os.path.join(self.log_dir, "history.csv"), index=False)

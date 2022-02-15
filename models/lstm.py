@@ -10,28 +10,25 @@ from models.baseline import SiamNet
 
 
 # noinspection PyTypeChecker,PyUnboundLocalVariable
-class SiameseLSTM(SiamNet):
-    def __init__(self, model_hyperparams, n_lstm_layers=1, hidden_dim=256, bidirectional=False, insert_where=None):
+class SiamNetLSTM(SiamNet):
+    def __init__(self, model_hyperparams=None, n_lstm_layers=1, hidden_dim=256, bidirectional=False, insert_where=0):
         super().__init__(model_hyperparams)
-        self.save_hyperparameters("n_lstm_layers", "hidden_dim", "bidirectional", "insert_where")
+        if 'n_lstm_layers' not in model_hyperparams:
+            self.save_hyperparameters("n_lstm_layers", "hidden_dim", "bidirectional", "insert_where")
 
         # Change linear layers
         if self.hparams.insert_where == 0:
-            # immediately after convolutional layer
-            input_size = 256 * 3 * 3 * 2
-            self.fc8.fc8 = nn.Linear(self.hparams.hidden_dim, self.hparams.output_dim)
-        elif self.hparams.insert_where == 1:
             # after first FC layer
             input_size = 1024
-            self.fc7_new.fc7 = nn.Linear(256 * 3 * 3 * 2, self.hparams.output_dim)
+            self.fc9.fc9 = nn.Linear(self.hparams.hidden_dim, self.hparams.output_dim)
+        elif self.hparams.insert_where == 1:
+            # after conv layers, before first FC layer
+            input_size = 256 * 3 * 3 * 2
+            self.fc8.fc8 = nn.Linear(self.hparams.hidden_dim, 1024)
         else:
-            # right before prediction layer
+            # before last FC layer
             input_size = self.hparams.output_dim
-            i = (1 if not self.hparams.bidirectional else 2)
-            if not self.hparams.include_cov:
-                self.fc9.fc9 = nn.Linear(self.hparams.hidden_dim * i, self.hparams.output_dim)
-            else:
-                self.fc10c.fc10c = nn.Linear(self.hparams.hidden_dim * i, 2)
+            self.fc10.fc10 = nn.Linear(self.hparams.hidden_dim, 2)
 
         # LSTM layers
         self.lstm = nn.Sequential()
@@ -45,134 +42,155 @@ class SiameseLSTM(SiamNet):
         uses an LSTM to aggregate spatial features over time.
         """
         if self.hparams.insert_where == 0:
-            out = self._cnn_lstm_2(data)
-        else:
             out = self._cnn_lstm_0(data)
+        elif self.hparams.insert_where == 1:
+            out = self._cnn_lstm_1(data)
+        else:
+            out = self._cnn_lstm_2(data)
 
         return torch.log_softmax(out, dim=1)
 
     def _cnn_lstm_0(self, data):
         """Default forward pass.
-        If no covariates, CNN -> first FC layer -> concat views ->  LSTM -> remaining FC.
-        If there are covariates, CNN -> FC -> concat views -> FC (cov) -> LSTM -> remaining FC.
+        Assumes no covariates. Follows CNN -> first FC layer -> concat views ->  LSTM -> remaining FC
         """
         x_t = data['img']
-        x_t = x_t.transpose(0, 1)
+        x = torch.div(x_t, 255)
 
-        t_embeddings = []
-        for t, x in enumerate(x_t):
-            B, V, H, W = x.size()
-            x = x.transpose(0, 1)
+        if len(x.size()) == 5:
+            x = x_t[0]
 
-            x_list = []
-            for i in range(2):
-                z = torch.unsqueeze(x[i], 1)
-                z = z.expand(-1, 3, -1, -1)
-                z = self.conv1(z)
-                z = self.conv2(z)
-                z = self.conv3(z)
-                z = self.conv4(z)
-                z = self.conv5(z)
-                z = self.conv6(z)
-                z = self.conv7(z)
-                z = z.view([B, 1, -1])
-                z = self.fc8(z)
-                z = z.view([B, 1, -1])
-                x_list.append(z)
+        T, C, H, W = x.size()
+        x = x.transpose(0, 1)
 
-            x = torch.cat(x_list, 1)
-            x = x.view(B, -1)
+        x_list = []
+        for i in range(2):
+            z = torch.unsqueeze(x[i], 1)
+            z = z.expand(-1, 3, -1, -1)
+            z = self.conv1(z)
+            z = self.conv2(z)
+            z = self.conv3(z)
+            z = self.conv4(z)
+            z = self.conv5(z)
+            z = self.conv6(z)
+            z = self.conv7(z)
+            z = z.view([T, 1, -1])
+            z = self.fc8(z)
+            x_list.append(z)
 
-            if self.hparams.include_cov:
-                x = self.fc9(x)
-                x = self.fc10(x)
-
-                age = data['Age_wks'][:, t].view(B, 1)
-                side = data['Side_L'][:, t].view(B, 1)
-
-                x = torch.cat((x, age, side), 1)
-                x = self.fc10b(x)
-
-            t_embeddings.append(x)
-
-        x = torch.stack(t_embeddings)
-
-        print("Stack:", x.size())
+        x = torch.cat(x_list, 1)
+        x = x.view(1, T, -1)
 
         lstm_out, (h_f, _) = self.lstm(x)
+        x = h_f[0]
 
-        print("LSTM Out:", lstm_out.size())
-        print("LSTM Out:", lstm_out[-1].size())
-        print("Last Hidden State:", h_f.size())
-        x = lstm_out[-1]                         # extract last hidden state
-
-        if not self.hparams.include_cov:
-            x = self.fc9(x)
-            x = self.fc10(x)
-        else:
-            x = self.fc10c(x)
-
-        print(x)
+        x = self.fc9(x)
+        x = self.fc10(x)
         return x
 
-    # TODO: Do this
-    def _cnn_lstm_1(self, x_t):
+    def _cnn_lstm_1(self, data):
         """Alternative forward pass.
-        If no covariates, CNN -> concat views ->  LSTM -> remaining FC.
-        If there are covariates, CNN -> FC -> concat views -> FC (cov) -> LSTM -> remaining FC.
+        Assumes no covariates. Follows CNN -> concat views ->  LSTM -> remaining FC.
         """
         x_t = data['img']
-        x_t = x_t.transpose(0, 1)
+        x = torch.div(x_t, 255)
 
-        t_embeddings = []
-        for t, x in enumerate(x_t):
-            B, V, H, W = x.size()
-            x = x.transpose(0, 1)
+        if len(x.size()) == 5:
+            x = x_t[0]
 
-            x_list = []
-            for i in range(2):
-                z = torch.unsqueeze(x[i], 1)
-                z = z.expand(-1, 3, -1, -1)
-                z = self.conv1(z)
-                z = self.conv2(z)
-                z = self.conv3(z)
-                z = self.conv4(z)
-                z = self.conv5(z)
-                z = self.conv6(z)
-                z = self.conv7(z)
-                z = z.view([B, 1, -1])
-                z = self.fc8(z)
-                z = z.view([B, 1, -1])
-                x_list.append(z)
+        T, C, H, W = x.size()
+        x = x.transpose(0, 1)
 
-            x = torch.cat(x_list, 1)
-            x = x.view(B, -1)
+        x_list = []
+        for i in range(2):
+            z = torch.unsqueeze(x[i], 1)
+            z = z.expand(-1, 3, -1, -1)
+            z = self.conv1(z)
+            z = self.conv2(z)
+            z = self.conv3(z)
+            z = self.conv4(z)
+            z = self.conv5(z)
+            z = self.conv6(z)
+            z = self.conv7(z)
+            z = z.view([T, 1, -1])
+            x_list.append(z)
 
-            if self.hparams.include_cov:
-                x = self.fc9(x)
-                x = self.fc10(x)
+        x = torch.cat(x_list, 1)
+        x = x.view(1, T, -1)
 
-                age = data['Age_wks'].view(B, 1)
-                side = data['Side_L'].view(B, 1)
-
-                x = torch.cat((x, age, side), 1)
-                x = self.fc10b(x)
-
-            t_embeddings.append(x)
-
-        x = torch.stack(t_embeddings)
         lstm_out, (h_f, _) = self.lstm(x)
-        x = h_f[-1]                         # extract last hidden state
+        x = h_f[0]
 
-        if not self.hparams.include_cov:
-            x = self.fc9(x)
-            x = self.fc10(x)
-        else:
-            x = self.fc10c(x)
-
+        x = self.fc8(x)
+        x = self.fc9(x)
+        x = self.fc10(x)
         return x
 
-    # TODO: Do this
-    def _cnn_lstm_2(self, x_t):
-        """Alternative forward pass. LSTM placed after last convolutional layer (fc6b)."""
-        pass
+    def _cnn_lstm_2(self, data):
+        """Alternative forward pass.
+        Assumes no covariates. Follows CNN -> FC -> LSTM -> last (prediction) FC."""
+        x_t = data['img']
+        x = torch.div(x_t, 255)
+
+        if len(x.size()) == 5:
+            x = x_t[0]
+
+        T, C, H, W = x.size()
+        x = x.transpose(0, 1)
+
+        x_list = []
+        for i in range(2):
+            z = torch.unsqueeze(x[i], 1)
+            z = z.expand(-1, 3, -1, -1)
+            z = self.conv1(z)
+            z = self.conv2(z)
+            z = self.conv3(z)
+            z = self.conv4(z)
+            z = self.conv5(z)
+            z = self.conv6(z)
+            z = self.conv7(z)
+            z = z.view([T, 1, -1])
+            z = self.fc8(z)
+            x_list.append(z)
+
+        x = torch.cat(x_list, 1)
+        x = x.view((T, 1, -1))
+
+        x = self.fc9(x)
+
+        x = x.view(1, T, -1)
+        lstm_out, (h_f, _) = self.lstm(x)
+        x = h_f[0]
+
+        x = self.fc10(x)
+        return x
+
+
+if __name__ == '__main__':
+    import numpy as np
+
+    hyperparams = {'lr': 0.001, "batch_size": 1,
+                   'adam': True,
+                   'momentum': 0.9,
+                   'weight_decay': 0.0005,
+                   'include_cov': False,
+                   'output_dim': 128,
+                   'dropout_rate': 0,
+                   'weighted_loss': 0.5,
+                   'stop_epoch': 40
+                   }
+    model = SiamNetLSTM(hyperparams, insert_where=2)
+
+
+    def simulate(n=5):
+        data = {"img": torch.from_numpy(np.random.rand(1, n, 2, 256, 256)).type(torch.FloatTensor)}
+        labels = np.random.randint(0, 2, n)
+        # output_ = model.forward(data)
+        # reducer_ = umap.UMAP(random_state=42)
+        # embeds_ = reducer_.fit_transform(output_)
+        # plot_umap(embeds_, labels)
+        print(model.forward(data))
+
+
+    simulate()
+

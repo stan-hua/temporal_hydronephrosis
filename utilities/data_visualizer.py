@@ -3,6 +3,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 import seaborn as sns
+from umap import UMAP
 
 from utilities.dataset_prep import KidneyDataModule
 
@@ -94,9 +95,15 @@ class DataViewer:
 
 
 def plot_umap(embeds, labels, save_dir=None, plot_name="UMAP"):
-    """Given 2-dimensional UMAP embeddings and labels for each sample, create UMAP plot."""
+    """Given intermediate model embeddings, extract and plot 2-dimensional UMAP embeddings and labels for each sample,
+    then plot UMAP."""
+    # Extract embeddings
+    reducer = UMAP(random_state=42)
+    umap_embeds = reducer.fit_transform(embeds)
+
+    # Generate plot
     plt.style.use('dark_background')
-    sns.scatterplot(x=embeds[:, 0], y=embeds[:, 1],
+    sns.scatterplot(x=umap_embeds[:, 0], y=umap_embeds[:, 1],
                     hue=labels,
                     legend="full",
                     alpha=1,
@@ -118,9 +125,10 @@ def plot_umap(embeds, labels, save_dir=None, plot_name="UMAP"):
 
 
 def load_data():
-    from drivers.model_training import parse_args, modify_args
+    from op.model_training import parse_args, modify_args
     args = parse_args()
     modify_args(args)
+    args.single_visit = True
     args.test_last_visit = False
 
     data_params = {'batch_size': 1,
@@ -149,29 +157,44 @@ def describe_data(data_dicts, plot_title=None):
 
     return data_viewer, data_viewer.df_cov, data_viewer.df_examples
 
-    # data_viewer.show_num_visits(positive_only=True)
-    # data_viewer.show_num_patients()
-    # data_viewer.plot_cov_distribution()
-    # data_viewer.plot_imaging_date_frequencies()
-
 
 if __name__ == "__main__":
+
     dm = load_data()
 
     # train_viewer, df_train_cov, df_train_examples = describe_data(dm.train_dicts, plot_title='Ordered Training Set')
     # val_viewer, df_val_cov, df_val_examples = describe_data(dm.val_dicts, plot_title='Ordered Validation Set')
-    test_viewer, df_test_cov, df_test_examples = describe_data(dm.test_set, plot_title='Unordered Test Set')
+    # test_viewer, df_test_cov, df_test_examples = describe_data(dm.test_set, plot_title='Unordered Test Set')
+    #
+    # stan_viewer, df_stan_cov, df_stan_examples = describe_data(dm.stan_test_set, plot_title='Stanford Data')
+    st_viewer, df_st_cov, df_st_examples = describe_data(dm.st_test_set, plot_title='SickKids Silent Trial Data')
+    ui_viewer, df_ui_cov, df_ui_examples = describe_data(dm.ui_test_set, plot_title='UIowa Data')
+    # chop_viewer, df_chop_cov, df_chop_examples = describe_data(dm.chop_test_set, plot_title='CHOP Data')
 
-    stan_viewer, df_stan_cov, df_stan_examples = describe_data(dm.stan_test_set, plot_title='Stanford Data')
-    # st_viewer, df_st_cov, df_st_examples = describe_data(dm.st_test_set, plot_title='SickKids Silent Trial Data')
-    # ui_viewer, df_ui_cov, df_ui_examples = describe_data(dm.ui_test_set, plot_title='UIowa Data')
+    img_dict = dm.st_test_set[0]
+    df = df_st_cov
 
-    # describe_data((X_train_, y_train_, cov_train_), (X_test_, y_test_, cov_test_))
+    import torch
+    from op.model_training import instantiate_model
+    import numpy as np
 
-    # train_val_generator = make_validation_set(X_train_, y_train_, cov_train_, cv=True, num_folds=5)
-    # i = 1
-    # for train_val_fold in train_val_generator:  # only iterates once if not cross-fold validation
-    #     print(f"Fold {i}/{5}")
-    #     X_train, y_train, cov_train, X_val, y_val, cov_val = train_val_fold
-    #     describe_data((X_train, y_train, cov_train), (X_val, y_val, cov_val))
-    #     i += 1
+    model = instantiate_model("baseline", None, True)
+
+    fig, axs = plt.subplots(1, 2)
+    while not plt.waitforbuttonpress():
+        axs[0].clear()
+        axs[1].clear()
+        example = df.sample(n=1)
+        print(example)
+        idx = example['index'].iloc[0]
+
+        data = {'img': torch.div(torch.unsqueeze(torch.FloatTensor(img_dict[idx]), 0), 255)}
+        pred = model(data).detach().numpy()
+        prob = np.exp(pred)
+        print(f"Label: {example['surgery'].iloc[0]}")
+        print(f"Prediction: {np.argmax(pred)} ({np.exp(pred[0][1])})")
+        axs[0].imshow(img_dict[idx][0], cmap="gray")
+        axs[1].imshow(img_dict[idx][1], cmap="gray")
+
+        if input("Quit?") != "":
+            break

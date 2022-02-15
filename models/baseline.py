@@ -2,10 +2,12 @@
 Baseline Siamese 2D CNN model.
 """
 
+import numpy as np
 import pytorch_lightning as pl
 import torch
-import torchmetrics.functional
 from torch import nn
+import torchmetrics
+
 from utilities.kornia_augmentation import DataAugmentation
 
 
@@ -24,6 +26,19 @@ class SiamNet(pl.LightningModule):
         """
         super(SiamNet, self).__init__()
 
+        self.updated_naming = True
+
+        if model_hyperparams is None:
+            model_hyperparams = {'adam': False,
+                                 'dropout_rate': 0.5,
+                                 'include_cov': False,
+                                 'lr': 0.005,
+                                 'momentum': 0.9,
+                                 'output_dim': 256,
+                                 'weight_decay': 0.0005,
+                                 'weighted_loss': 0.5
+                                 }
+
         # Save hyperparameters to checkpoint
         self.save_hyperparameters(model_hyperparams)
 
@@ -41,70 +56,121 @@ class SiamNet(pl.LightningModule):
             exec(f"self.{dset}_auprc= torchmetrics.AveragePrecision(num_classes=1)")
 
         # CONVOLUTIONAL BLOCKS
-        self.conv1 = nn.Sequential()
-        self.conv1.add_module('conv1_s1', nn.Conv2d(3, 96, kernel_size=11, stride=2, padding=0, bias=False))
-        self.conv1.add_module('batch1_s1', nn.BatchNorm2d(96))
-        self.conv1.add_module('relu1_s1', nn.ReLU(inplace=True))
-        self.conv1.add_module('pool1_s1', nn.MaxPool2d(kernel_size=3, stride=2))
-        self.conv1.add_module('lrn1_s1', LRN(local_size=5, alpha=0.0001, beta=0.75))
+        if self.updated_naming:
+            self.conv1 = nn.Sequential()
+            self.conv1.add_module('conv1_s1', nn.Conv2d(3, 96, kernel_size=11, stride=2, padding=0, bias=False))
+            self.conv1.add_module('batch1_s1', nn.BatchNorm2d(96))
+            self.conv1.add_module('relu1_s1', nn.ReLU(inplace=True))
+            self.conv1.add_module('pool1_s1', nn.MaxPool2d(kernel_size=3, stride=2))
+            self.conv1.add_module('lrn1_s1', LRN(local_size=5, alpha=0.0001, beta=0.75))
 
-        self.conv2 = nn.Sequential()
-        self.conv2.add_module('conv2_s1', nn.Conv2d(96, 256, kernel_size=5, padding=2, groups=2, bias=False))
-        self.conv2.add_module('batch2_s1', nn.BatchNorm2d(256))
-        self.conv2.add_module('relu2_s1', nn.ReLU(inplace=True))
-        self.conv2.add_module('pool2_s1', nn.MaxPool2d(kernel_size=3, stride=2))
-        self.conv2.add_module('lrn2_s1', LRN(local_size=5, alpha=0.0001, beta=0.75))
+            self.conv2 = nn.Sequential()
+            self.conv2.add_module('conv2_s1', nn.Conv2d(96, 256, kernel_size=5, padding=2, groups=2, bias=False))
+            self.conv2.add_module('batch2_s1', nn.BatchNorm2d(256))
+            self.conv2.add_module('relu2_s1', nn.ReLU(inplace=True))
+            self.conv2.add_module('pool2_s1', nn.MaxPool2d(kernel_size=3, stride=2))
+            self.conv2.add_module('lrn2_s1', LRN(local_size=5, alpha=0.0001, beta=0.75))
 
-        self.conv3 = nn.Sequential()
-        self.conv3.add_module('conv3_s1', nn.Conv2d(256, 384, kernel_size=3, padding=1, bias=False))
-        self.conv3.add_module('batch3_s1', nn.BatchNorm2d(384))
-        self.conv3.add_module('relu3_s1', nn.ReLU(inplace=True))
+            self.conv3 = nn.Sequential()
+            self.conv3.add_module('conv3_s1', nn.Conv2d(256, 384, kernel_size=3, padding=1, bias=False))
+            self.conv3.add_module('batch3_s1', nn.BatchNorm2d(384))
+            self.conv3.add_module('relu3_s1', nn.ReLU(inplace=True))
 
-        self.conv4 = nn.Sequential()
-        self.conv4.add_module('conv4_s1', nn.Conv2d(384, 384, kernel_size=3, padding=1, groups=2, bias=False))
-        self.conv4.add_module('batch4_s1', nn.BatchNorm2d(384))
-        self.conv4.add_module('relu4_s1', nn.ReLU(inplace=True))
+            self.conv4 = nn.Sequential()
+            self.conv4.add_module('conv4_s1', nn.Conv2d(384, 384, kernel_size=3, padding=1, groups=2, bias=False))
+            self.conv4.add_module('batch4_s1', nn.BatchNorm2d(384))
+            self.conv4.add_module('relu4_s1', nn.ReLU(inplace=True))
 
-        self.conv5 = nn.Sequential()
-        self.conv5.add_module('conv5_s1', nn.Conv2d(384, 256, kernel_size=3, padding=1, groups=2, bias=False))
-        self.conv5.add_module('batch5_s1', nn.BatchNorm2d(256))
-        self.conv5.add_module('relu5_s1', nn.ReLU(inplace=True))
-        self.conv5.add_module('pool5_s1', nn.MaxPool2d(kernel_size=3, stride=2))
+            self.conv5 = nn.Sequential()
+            self.conv5.add_module('conv5_s1', nn.Conv2d(384, 256, kernel_size=3, padding=1, groups=2, bias=False))
+            self.conv5.add_module('batch5_s1', nn.BatchNorm2d(256))
+            self.conv5.add_module('relu5_s1', nn.ReLU(inplace=True))
+            self.conv5.add_module('pool5_s1', nn.MaxPool2d(kernel_size=3, stride=2))
 
-        self.conv6 = nn.Sequential()
-        self.conv6.add_module('conv6_s1', nn.Conv2d(256, 1024, kernel_size=2, stride=1, padding=1, bias=False))
-        self.conv6.add_module('batch6_s1', nn.BatchNorm2d(1024))
-        self.conv6.add_module('relu6_s1', nn.ReLU(inplace=True))
+            self.conv6 = nn.Sequential()
+            self.conv6.add_module('conv6_s1', nn.Conv2d(256, 1024, kernel_size=2, stride=1, padding=1, bias=False))
+            self.conv6.add_module('batch6_s1', nn.BatchNorm2d(1024))
+            self.conv6.add_module('relu6_s1', nn.ReLU(inplace=True))
 
-        self.conv7 = nn.Sequential()
-        self.conv7.add_module('conv7_s1', nn.Conv2d(1024, 256, kernel_size=3, stride=2, bias=False))
-        self.conv7.add_module('batch7_s1', nn.BatchNorm2d(256))
-        self.conv7.add_module('relu7_s1', nn.ReLU(inplace=True))
-        self.conv7.add_module('pool7_s1', nn.MaxPool2d(kernel_size=3, stride=2))
+            self.conv7 = nn.Sequential()
+            self.conv7.add_module('conv7_s1', nn.Conv2d(1024, 256, kernel_size=3, stride=2, bias=False))
+            self.conv7.add_module('batch7_s1', nn.BatchNorm2d(256))
+            self.conv7.add_module('relu7_s1', nn.ReLU(inplace=True))
+            self.conv7.add_module('pool7_s1', nn.MaxPool2d(kernel_size=3, stride=2))
 
-        # DENSE LAYERS
-        self.fc8 = nn.Sequential()
-        self.fc8.add_module('fc8', nn.Linear(256 * 3 * 3, 512))
-        self.fc8.add_module('relu8', nn.ReLU(inplace=True))
-        self.fc8.add_module('drop8', nn.Dropout(p=self.hparams.dropout_rate))
+            # DENSE LAYERS
+            self.fc8 = nn.Sequential()
+            self.fc8.add_module('fc8', nn.Linear(256 * 3 * 3, 512))
+            self.fc8.add_module('relu8', nn.ReLU(inplace=True))
+            self.fc8.add_module('drop8', nn.Dropout(p=self.hparams.dropout_rate))
 
-        self.fc9 = nn.Sequential()
-        self.fc9.add_module('fc9', nn.Linear(2 * 512, self.hparams.output_dim))
-        self.fc9.add_module('relu9', nn.ReLU(inplace=True))
-        self.fc9.add_module('drop9', nn.Dropout(p=self.hparams.dropout_rate))
+            self.fc9 = nn.Sequential()
+            self.fc9.add_module('fc9', nn.Linear(2 * 512, self.hparams.output_dim))
+            self.fc9.add_module('relu9', nn.ReLU(inplace=True))
+            self.fc9.add_module('drop9', nn.Dropout(p=self.hparams.dropout_rate))
 
-        self.fc10 = nn.Sequential()
-        self.fc10.add_module('fc10', nn.Linear(self.hparams.output_dim, 2))
+            self.fc10 = nn.Sequential()
+            self.fc10.add_module('fc10', nn.Linear(self.hparams.output_dim, 2))
 
-        if self.hparams.include_cov:
-            self.fc10.add_module('relu10', nn.ReLU(inplace=True))
+            if self.hparams.include_cov:
+                self.fc10.add_module('relu10', nn.ReLU(inplace=True))
 
-            self.fc10b = nn.Sequential()
-            self.fc10b.add_module('fc10b', nn.Linear(4, self.hparams.output_dim))
-            self.fc10b.add_module('relu10b', nn.ReLU(inplace=True))
+                self.fc10b = nn.Sequential()
+                self.fc10b.add_module('fc10b', nn.Linear(4, self.hparams.output_dim))
+                self.fc10b.add_module('relu10b', nn.ReLU(inplace=True))
 
-            self.fc10c = nn.Sequential()
-            self.fc10c.add_module('fc10c', nn.Linear(self.hparams.output_dim, 2))
+                self.fc10c = nn.Sequential()
+                self.fc10c.add_module('fc10c', nn.Linear(self.hparams.output_dim, 2))
+        else:
+            # CONVOLUTIONAL BLOCKS
+            self.conv = nn.Sequential()
+            self.conv.add_module('conv1_s1', nn.Conv2d(3, 96, kernel_size=11, stride=2, padding=0))
+            self.conv.add_module('batch1_s1', nn.BatchNorm2d(96))
+            self.conv.add_module('relu1_s1', nn.ReLU(inplace=True))
+            self.conv.add_module('pool1_s1', nn.MaxPool2d(kernel_size=3, stride=2))
+            self.conv.add_module('lrn1_s1', LRN(local_size=5, alpha=0.0001, beta=0.75))
+
+            self.conv.add_module('conv2_s1', nn.Conv2d(96, 256, kernel_size=5, padding=2, groups=2))
+            self.conv.add_module('batch2_s1', nn.BatchNorm2d(256))
+            self.conv.add_module('relu2_s1', nn.ReLU(inplace=True))
+            self.conv.add_module('pool2_s1', nn.MaxPool2d(kernel_size=3, stride=2))
+            self.conv.add_module('lrn2_s1', LRN(local_size=5, alpha=0.0001, beta=0.75))
+
+            self.conv.add_module('conv3_s1', nn.Conv2d(256, 384, kernel_size=3, padding=1))
+            self.conv.add_module('batch3_s1', nn.BatchNorm2d(384))
+            self.conv.add_module('relu3_s1', nn.ReLU(inplace=True))
+
+            self.conv.add_module('conv4_s1', nn.Conv2d(384, 384, kernel_size=3, padding=1, groups=2))
+            self.conv.add_module('batch4_s1', nn.BatchNorm2d(384))
+            self.conv.add_module('relu4_s1', nn.ReLU(inplace=True))
+
+            self.conv.add_module('conv5_s1', nn.Conv2d(384, 256, kernel_size=3, padding=1, groups=2))
+            self.conv.add_module('batch5_s1', nn.BatchNorm2d(256))
+            self.conv.add_module('relu5_s1', nn.ReLU(inplace=True))
+            self.conv.add_module('pool5_s1', nn.MaxPool2d(kernel_size=3, stride=2))
+
+            self.fc6 = nn.Sequential()
+            self.fc6.add_module('fc6_s1', nn.Conv2d(256, 1024, kernel_size=2, stride=1, padding=1))
+            self.fc6.add_module('batch6_s1', nn.BatchNorm2d(1024))
+            self.fc6.add_module('relu6_s1', nn.ReLU(inplace=True))
+
+            self.fc6b = nn.Sequential()
+            self.fc6b.add_module('conv6b_s1', nn.Conv2d(1024, 256, kernel_size=3, stride=2))
+            self.fc6b.add_module('batch6b_s1', nn.BatchNorm2d(256))
+            self.fc6b.add_module('relu6_s1', nn.ReLU(inplace=True))
+            self.fc6b.add_module('pool6b_s1', nn.MaxPool2d(kernel_size=3, stride=2))
+
+            # DENSE LAYERS
+            self.fc6c = nn.Sequential()
+            self.fc6c.add_module('fc7', nn.Linear(256 * 3 * 3, 512))
+            self.fc6c.add_module('relu7', nn.ReLU(inplace=True))
+
+            self.fc7_new = nn.Sequential()
+            self.fc7_new.add_module('fc7', nn.Linear(2 * 512, 256))
+            self.fc7_new.add_module('relu7', nn.ReLU(inplace=True))
+
+            self.classifier_new = nn.Sequential()
+            self.classifier_new.add_module('fc8', nn.Linear(256, 2))
 
     def load(self, checkpoint):
         model_dict = self.state_dict()
@@ -112,7 +178,7 @@ class SiamNet(pl.LightningModule):
 
         if 'model_state_dict' in pretrained_dict.keys():
             pretrained_dict = pretrained_dict["model_state_dict"]
-        pretrained_dict = {k: v for k, v in list(pretrained_dict.items()) if k in model_dict}
+        # pretrained_dict = {k: v for k, v in list(pretrained_dict.items()) if k in model_dict}
 
         model_dict.update(pretrained_dict)
         self.load_state_dict(model_dict)
@@ -129,8 +195,11 @@ class SiamNet(pl.LightningModule):
         return optimizer
 
     def forward(self, data):
-        """Images in batch input is of the form (B,V,H,W) where V=view (sagittal, transverse)"""
+        """Images in batch input is of the form (B, V, 256, 256) where V=view (sagittal, transverse). Model expects
+        image pixel intensities to be in [0, 255]."""
         x = data['img']
+        if self.updated_naming:
+            x = torch.div(x, 255)
 
         B, V, H, W = x.size()
         x = x.transpose(0, 1)
@@ -138,22 +207,32 @@ class SiamNet(pl.LightningModule):
         for i in range(2):  # extract features for each US plane (sag, trv)
             z = torch.unsqueeze(x[i], 1)
             z = z.expand(-1, 3, -1, -1)
-            z = self.conv1(z)
-            z = self.conv2(z)
-            z = self.conv3(z)
-            z = self.conv4(z)
-            z = self.conv5(z)
-            z = self.conv6(z)
-            z = self.conv7(z)
-            z = z.view([B, 1, -1])
-            z = self.fc8(z)
-            z = z.view([B, 1, -1])
+            if self.updated_naming:
+                z = self.conv1(z)
+                z = self.conv2(z)
+                z = self.conv3(z)
+                z = self.conv4(z)
+                z = self.conv5(z)
+                z = self.conv6(z)
+                z = self.conv7(z)
+                z = z.view([B, 1, -1])
+                z = self.fc8(z)
+            else:
+                z = self.conv(z)
+                z = self.fc6(z)
+                z = self.fc6b(z)
+                z = z.view([B, 1, -1])
+                z = self.fc6c(z)
             x_list.append(z)
 
         x = torch.cat(x_list, 1)
         x = x.view(B, -1)
-        x = self.fc9(x)
-        x = self.fc10(x)
+        if self.updated_naming:
+            x = self.fc9(x)
+            x = self.fc10(x)
+        else:
+            x = self.fc7_new(x)
+            x = self.classifier_new(x)
 
         if self.hparams.include_cov:
             age = data['Age_wks'].view(B, 1)
@@ -193,8 +272,14 @@ class SiamNet(pl.LightningModule):
 
         return loss
 
-    def test_step(self, test_batch, batch_idx, dataset_idx):
+    def test_step(self, test_batch, batch_idx, dataset_idx=0):
         data_dict, y_true, id_ = test_batch
+
+        if self.augmentation is not None:
+            print("Augmenting testing images")
+            self.augmentation.set_mode('eval')
+            data_dict['img'] = self.augmentation(data_dict['img'])
+
         out = self.forward(data_dict)
         y_pred = torch.argmax(out, dim=1)
 
@@ -239,7 +324,8 @@ class SiamNet(pl.LightningModule):
         self.val_auprc.reset()
 
     def test_epoch_end(self, test_step_outputs):
-        for i in range(len(test_step_outputs)):
+        num_datasets = len(test_step_outputs) if len(test_step_outputs) <= 5 else 1
+        for i in range(num_datasets):
             dset = f'test{i}'
 
             loss = torch.tensor(test_step_outputs[i]).mean()
@@ -261,6 +347,7 @@ class SiamNet(pl.LightningModule):
     @torch.no_grad()
     def forward_embed(self, data):
         x = data['img']
+        x = torch.div(x, 255)
 
         B, T, C, H = x.size()
         x = x.transpose(0, 1)
@@ -282,19 +369,9 @@ class SiamNet(pl.LightningModule):
 
         x = torch.cat(x_list, 1)
         x = x.view(B, -1)
-        x = self.fc9(x)
+        # x = self.fc9(x)
 
-        if not self.hparams.include_cov:
-            return x.cpu().detach().numpy()
-        else:
-            x = self.fc10(x)
-
-            age = data['Age_wks'].view(B, 1)
-            side = data['Side_L'].view(B, 1)
-
-            x = torch.cat((x, age, side), 1)
-            x = self.fc10b(x)
-            return x.cpu().detach().numpy()
+        return x.cpu().detach().numpy()
 
     def extract_embeddings(self, dataloader):
         """Extract embeddings, and return labels and IDs for all items in inserted dataloader."""
@@ -314,6 +391,25 @@ class SiamNet(pl.LightningModule):
         ids = np.concatenate(id_list, axis=None)
 
         return embeds, labels, ids
+
+    def extract_preds(self, dataloader):
+        """Predict samples in dataloader. Return log-probability of positive prediction for every example."""
+        preds = []
+        y_list = []
+        id_list = []
+
+        self.eval()
+        for batch_idx, (data_dict, y_true, id_) in enumerate(dataloader):
+            out = self.forward(data_dict)
+            preds.append(out[:, 1].cpu().detach().numpy())  # get probability for positive prediction
+            y_list.append(y_true.numpy())
+            id_list.append(id_)
+
+        preds = np.concatenate(preds, axis=0)
+        labels = np.concatenate(y_list, axis=None)
+        ids = np.concatenate(id_list, axis=None)
+
+        return preds, labels, ids
 
 
 class LRN(nn.Module):
@@ -344,16 +440,11 @@ class LRN(nn.Module):
 
 
 if __name__ == '__main__':
-    import umap
-    import numpy as np
-    import torch
-    from utilities.data_visualizer import plot_umap
-
     hyperparams = {'lr': 0.001, "batch_size": 16,
                    'adam': True,
                    'momentum': 0.9,
                    'weight_decay': 0.0005,
-                   'include_cov': True,
+                   'include_cov': False,
                    'output_dim': 128,
                    'dropout_rate': 0,
                    'weighted_loss': 0.5,
@@ -361,19 +452,24 @@ if __name__ == '__main__':
                    }
     model = SiamNet(hyperparams)
 
+    shared_dir = "C:/Users/Stanley Hua/SickKids/Lauren Erdman - HN_Stanley/"
+
+
+    # model.load("C:/Users/Stanley Hua/SickKids/Lauren Erdman - HN_Stanley/ModelWeights/NoFinalLayerFineTuneNoCov_v2_TrainOnly_40epochs_bs16_lr0.001_RCFalse_covFalse_OSFalse_30thEpoch.pth")
 
     def simulate(n=100):
         data = {"img": torch.from_numpy(np.random.rand(n, 2, 256, 256)).type(torch.FloatTensor),
                 "Age_wks": torch.from_numpy((np.random.rand(n) * 40).round()).type(torch.FloatTensor),
                 "Side_L": torch.from_numpy(np.random.randint(0, 2, n)).type(torch.FloatTensor)}
         labels = np.random.randint(0, 2, n)
-        output_ = model.forward_embed(data)
-        reducer_ = umap.UMAP(random_state=42)
-        embeds_ = reducer_.fit_transform(output_)
-        plot_umap(embeds_, labels)
+        output_ = model.forward(data)
+        # reducer_ = umap.UMAP(random_state=42)
+        # embeds_ = reducer_.fit_transform(output_)
+        # plot_umap(embeds_, labels)
 
 
-    reducer = umap.UMAP(random_state=42)
-    umap_embeds = reducer.fit_transform(output)
+    # simulate(100)
 
-    plot_umap(umap_embeds, labels)
+    results = json.load(open(
+        f"{shared_dir}Results/NoFinalLayerFineTuneNoCov_v2_TrainOnly_40epochs_bs16_lr0.001_RCFalse_covFalse_OSFalse.json",
+        "r"))

@@ -19,6 +19,7 @@ class SiamNetAvgPred(SiamNet):
             - data['img'] is of the form (1, T, C, H, W) or (T, C, H, W), where T=time, V=view (sagittal, transverse)
         """
         x = data['img']
+        x = torch.div(x, 255)
 
         if len(x.size()) == 5:
             x = x[0]
@@ -39,7 +40,6 @@ class SiamNetAvgPred(SiamNet):
             z = self.conv7(z)
             z = z.view([T, 1, -1])
             z = self.fc8(z)
-            z = z.view([T, 1, -1])
             x_list.append(z)
 
         x = torch.cat(x_list, 1)
@@ -68,6 +68,7 @@ class SiamNetAvgPred(SiamNet):
     def forward_embed(self, data):
         """Returns 2-dimensional logits"""
         x = data['img']
+        x = torch.div(x, 255)
 
         if len(x.size()) == 5:
             x = x[0]
@@ -94,21 +95,8 @@ class SiamNetAvgPred(SiamNet):
         x = torch.cat(x_list, 1)
         x = x.view(T, -1)
 
-        if self.hparams.include_cov:
-            x = self.fc9(x)
-            x = self.fc10(x)
-
-            age = data['Age_wks'][0].view(T, 1)
-            side = data['Side_L'][0].view(T, 1)
-
-            x = torch.cat((x, age, side), 1)
-            x = self.fc10b(x)
-            x = self.fc10c(x)
-        else:
-            x = self.fc9(x)
-            x = self.fc10(x)
-
-        # Average logits over time
+        x = self.fc9(x)
+        x = self.fc10(x)
         x = torch.mean(x, dim=0, keepdim=True)
 
         return x.cpu().detach().numpy()

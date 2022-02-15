@@ -8,31 +8,24 @@ import numpy as np
 import torch
 from pytorch_lightning import Trainer
 from pytorch_lightning.callbacks.model_checkpoint import ModelCheckpoint
-from pytorch_lightning.callbacks import ModelSummary
 from pytorch_lightning.loggers import TensorBoardLogger
-from ray import tune
-from ray.tune.integration.pytorch_lightning import TuneReportCallback
-from ray.tune import CLIReporter
-from ray.tune.schedulers import ASHAScheduler, PopulationBasedTraining
-
-from models.baseline import SiamNet
-
-from models.baseline_efficientnet import SiameseEfficientNet
 
 from models.average_prediction import SiamNetAvgPred
+from models.baseline import SiamNet
 from models.conv_pooling import SiamNetConvPooling
-from models.lstm import SiameseLSTM
+from models.ensemble import Ensemble
+from models.lstm import SiamNetLSTM
 from models.tsm import SiamNetTSM
 from utilities.custom_logger import FriendlyCSVLogger
-from utilities.dataset_prep import KidneyDataModule
 from utilities.data_visualizer import plot_umap
+from utilities.dataset_prep import KidneyDataModule
 from utilities.kornia_augmentation import DataAugmentation
 
 warnings.filterwarnings('ignore')
 
 SEED = 42
 model_name = ""
-MODEL_TYPES = ("baseline", "baseline_efficientnet", "avg_pred", "conv_pool", "lstm", "tsm")
+MODEL_TYPES = ("baseline", "avg_pred", "conv_pool", "lstm", "tsm", "baseline_efficientnet", "ensemble")
 
 project_dir = "C:/Users/Stanley Hua/projects/temporal_hydronephrosis/"
 results_dir = f"{project_dir}results/"
@@ -69,8 +62,10 @@ def parse_args():
                         help="Json file of held-out, prospective silent trial data")
     parser.add_argument("--json_stan_test", default="StanfordOnly_rootfilenames_20211229.json",
                         help="Json file of held-out, retrospective Stanford data")
-    parser.add_argument("--json_ui_test", default="UIonly_rootfilenames_20211229.json",
+    parser.add_argument("--json_ui_test", default="UIonly_moreDat_rootfilenames_20220110.json",
                         help="Json file of held-out, retrospective University of Iowa data")
+    parser.add_argument("--json_chop_test", default="CHOP_rootfilenames_20220108.json",
+                        help="Json file of held-out, retrospective Children's Hospital of Philadelphia data")
 
     parser.add_argument("--model", default="baseline",
                         help="Choose model to run from the following: (baseline, conv_pool, lstm, tsm, stgru)")
@@ -89,7 +84,7 @@ def parse_args():
     parser.add_argument("--weighted_loss", default=0.5, type=float,
                         help="Weight to assign to positive class in calculating loss.")
 
-    parser.add_argument("--gradient_clip_norm", default=0., type=float,
+    parser.add_argument("--gradient_clip_norm", default=1, type=float,
                         help="Norm value for gradient clipping via vector norm.")
     parser.add_argument("--precision", default=32, type=int, help="Precision for training (32/16).")
 
@@ -134,30 +129,32 @@ def modify_args(args):
     global model_name
 
     # Model hyperparameters
-    args.lr = 0.0001    # 0.005
+    """
+    args.lr = 0.0001
     args.batch_size = 16
-    args.adam = True    # False
+    args.adam = True
     args.momentum = 0.9
-    args.weight_decay = 0.0005
+    args.weight_decay = 0.005
     args.weighted_loss = 0.5
     args.dropout_rate = 0.5
     args.include_cov = False
-    args.stop_epoch = 40
-    args.output_dim = 256
+    # args.stop_epoch = 24
+    args.output_dim = 128
 
-    args.gradient_clip_norm = 1  # or None, 1
-    args.precision = 32  # or 16, 32
+    args.gradient_clip_norm = 1
+    args.precision = 32
+    """
 
     args.load_hyperparameters = False
-    args.pretrained = False
+    args.pretrained = True
 
     # Choose model
-    args.model = MODEL_TYPES[1]
+    args.model = MODEL_TYPES[2]
 
     if args.model == "baseline":
         model_name = "Siamese_Baseline"
     elif args.model == 'baseline_efficientnet':
-        model_name = "Siamese_Baseline_EfficientNet"
+        model_name = "Siamese_EfficientNet"
     else:
         model_name = f"Siamese_{args.model.upper()}"
 
@@ -177,22 +174,22 @@ def modify_args(args):
     args.num_workers = 4
 
     # Image augmentation
-    args.augment_training = False
-    # args.normalize = False
+    # args.augment_training = True
+    # args.augment_probability = 0.5
+    # args.normalize = True
     # args.random_rotation = False
     # args.color_jitter = False
     # args.random_gaussian_blur = True
     # args.random_motion_blur = False
     # args.random_noise = False
 
-    # args.augment_probability = 0.5
-
     # Test set parameters
-    args.test_only = False
+    args.test_only = True
+    args.include_test = True
     args.ordered_split = False
 
     # Validation set parameters
-    args.include_validation = not args.test_only and True
+    args.include_validation = not args.test_only and False
     args.cv = args.include_validation and True
     args.num_folds = 5 if (args.cv and args.include_validation) else 1
 
@@ -200,16 +197,25 @@ def modify_args(args):
         args.ordered_validation = True  # train and validation split
 
 
-def load_hyperparameters(hyperparameters: dict, path: str):
+def load_hyperparameters(hyperparameters: dict):
     """Load in previously found the best hyperparameters and update <hyperparameters> in-place.
 
     @param hyperparameters: existing dictionary of model hyperparameters
-    @param path: path to grid search directory containing old hyperparameters stored in json
     """
-    if path is not None and os.path.exists(f"{path}/best_parameters.json"):
-        with open(f"{path}/best_parameters.json", "r") as param_file:
+    best_param_dir = None
+    if hyperparameters['model'] == MODEL_TYPES[1]:
+        best_param_dir = f"{results_dir}Siamese_AvgPred_grid_search(2022-02-02)"
+    elif hyperparameters['model'] == MODEL_TYPES[2]:
+        best_param_dir = f"{results_dir}Siamese_ConvPool_grid_search(2022-02-04)"
+    elif hyperparameters['model'] == MODEL_TYPES[3]:
+        best_param_dir = f"{results_dir}Siamese_LSTM_grid_search(2022-02-06)"
+    elif hyperparameters['model'] == MODEL_TYPES[4]:
+        best_param_dir = f"{results_dir}Siamese_TSM_grid_search(2022-02-05)"
+
+    if best_param_dir is not None and os.path.exists(f"{best_param_dir}/best_parameters.json"):
+        with open(f"{best_param_dir}/best_parameters.json", "r") as param_file:
             old_params = json.load(param_file)
-        hyperparameters['stop_epoch'] = old_params['epoch']
+        hyperparameters['stop_epoch'] = old_params['epoch'] + 1
         old_params = {k: v for k, v in list(old_params.items()) if k in hyperparameters and k != "stop_epoch"}
         hyperparameters.update(old_params)
         print("Previous hyperparameters loaded successfully!")
@@ -241,56 +247,81 @@ def create_augmentation_str(args):
     return augmentations_str
 
 
-def instantiate_augmenter(args):
+def parse_augmentation_str(s: str):
+    s_split = s.split("-")
+
+    augmentations = {}
+    for aug in ["normalize", "random_rotation", "color_jitter", "random_gaussian_blur", "random_motion_blur",
+                "random_noise"]:
+        augmentations[aug] = aug in s_split
+
+    return augmentations
+
+
+def instantiate_augmenter(hyperparams):
     """Instantiate image data augmentation object based on arguments. Return augmenter and name (given by all
     augmentation types enabled)."""
-    if not args.augment_training or args.model is not 'baseline':
+    if hyperparams is None:
         return None
 
-    augmenter = DataAugmentation(normalize=args.normalize, random_rotation=args.random_rotation,
-                                 color_jitter=args.color_jitter, random_gaussian_blur=args.random_gaussian_blur,
-                                 random_motion_blur=args.random_motion_blur, random_noise=args.random_noise,
-                                 prob=args.augment_probability)
+    if not hyperparams['augmented'] or hyperparams['model'] is not 'baseline':
+        return None
+
+    augs = parse_augmentation_str(hyperparams['augmentations_str'])
+    augmenter = DataAugmentation(normalize=augs['normalize'], random_rotation=augs['random_rotation'],
+                                 color_jitter=augs['color_jitter'], random_gaussian_blur=augs['random_gaussian_blur'],
+                                 random_motion_blur=augs['random_motion_blur'], random_noise=augs['random_noise'],
+                                 prob=hyperparams['augment_probability'])
 
     return augmenter
 
 
-def instantiate_model(args, hyperparams):
+def instantiate_model(model_type, hyperparams=None, pretrained=False, from_baseline=False):
     """Instantiate model based on arguments. Insert hyperparameters. If specified by arguments, add augmentation to
     model."""
     global curr_results_dir
-    old_checkpoint = ""
 
-    augmenter = instantiate_augmenter(args)
+    augmenter = instantiate_augmenter(hyperparams)
 
-    if args.model == 'avg_pred':
-        model = SiamNetAvgPred(model_hyperparams=hyperparams)
-    elif args.model == "conv_pool":
-        model = SiamNetConvPooling(model_hyperparams=hyperparams)
-    elif args.model == "lstm":
-        model = SiameseLSTM(hyperparams,
-                            bidirectional=True,
-                            hidden_dim=512,
-                            n_lstm_layers=1,
-                            insert_where=None)
-    elif args.model == "tsm":
-        model = SiamNetTSM(model_hyperparams=hyperparams)
-    elif args.model == "stgru":
-        # TODO: Implement this
-        raise NotImplementedError("STGRU has not yet been implemented!")
-    elif args.model == 'baseline_efficientnet':
-        model = SiameseEfficientNet(model_hyperparams=hyperparams, augmentation=augmenter)
-    else:  # baseline single-visit
-        model = SiamNet(model_hyperparams=hyperparams, augmentation=augmenter)
+    model_dict = {
+        MODEL_TYPES[0]: SiamNet,
+        MODEL_TYPES[1]: SiamNetAvgPred,
+        MODEL_TYPES[2]: SiamNetConvPooling,
+        MODEL_TYPES[3]: SiamNetLSTM,
+        MODEL_TYPES[4]: SiamNetTSM,
+        # 'baseline_efficientnet': SiameseEfficientNet,
+    }
+
+    if model_type != "ensemble":
+        model = model_dict[model_type](model_hyperparams=hyperparams, augmentation=augmenter)
+    else:
+        model = None
 
     # Load weights
-    if args.pretrained and args.model not in ['lstm', 'stgru']:
-        folder = f"{results_dir}/final/Siamese_Baseline_2022-01-27_19-59-33/fold0/version_0"
-        model = model.load_from_checkpoint(f"{folder}/checkpoints/last.ckpt", hparams_file=f"{folder}/hparams.yaml")
+    if pretrained:
+        folders = {
+            MODEL_TYPES[0]: f"{results_dir}/final/Siamese_Baseline_2022-02-01_23-20-51/fold0/version_0",
+            MODEL_TYPES[1]: f"{results_dir}/final/Siamese_AvgPred_2022-02-07_23-44-50/fold0/version_0",
+            MODEL_TYPES[2]: f"{results_dir}/final/Siamese_ConvPooling_2022-02-05_15-11-15/fold0/version_0",
+            MODEL_TYPES[3]: f"{results_dir}/final/Siamese_LSTM_2022-02-09_21-53-36/fold0/version_0",
+            MODEL_TYPES[4]: f"{results_dir}/final/Siamese_TSM_2022-02-10_00-41-32/fold0/version_0",
+        }
+
+        if model_type == 'ensemble':
+            for _type, _model in model_dict.items():
+                folder = folders[_type]
+                model_dict[_type] = model_dict[_type].load_from_checkpoint(f"{folder}/checkpoints/last.ckpt",
+                                                                           hparams_file=f"{folder}/hparams.yaml")
+            model = Ensemble(hyperparams, augmenter, models=model_dict)
+        else:
+            folder = folders[model_type if not from_baseline else "baseline"]
+            model = model.load_from_checkpoint(f"{folder}/checkpoints/last.ckpt", hparams_file=f"{folder}/hparams.yaml")
+            # model.load("C:/Users/Stanley Hua/SickKids/Lauren Erdman - HN_Stanley/ModelWeights/NoFinalLayerFineTuneNoCov_v2_TrainOnly_40epochs_bs16_lr0.001_RCFalse_covFalse_OSFalse_30thEpoch.pth")
     return model
 
 
-def update_paths(model_type):
+def update_paths(model_type, pretrained=False):
+    """Update global PATH variables to reflect type of model used."""
     global curr_results_dir, training_info_path, auc_path, results_dir, results_summary_path, model_name
     if model_type == 'avg_pred':
         model_name = "Siamese_AvgPred"
@@ -307,17 +338,22 @@ def update_paths(model_type):
     else:  # baseline single-visit
         model_name = "Siamese_Baseline"
 
+    if pretrained:
+        model_name = f"Pretrained_{model_name}"
+
     curr_results_dir = f"{results_dir}{model_name}_{timestamp}/"
     training_info_path = f"{curr_results_dir}info.csv"
     auc_path = f"{curr_results_dir}auc.json"
     results_summary_path = f"{curr_results_dir}history.csv"
 
 
-def run(hyperparams, args, dm, fold=0, checkpoint=True, tune_hyperparams=False, version_name=None,
+def run(config, args, dm, fold=0, checkpoint=True, tune_hyperparams=False, version_name=None,
         train=True, test=True):
     """Code to run training and/or testing."""
+    hyperparams = config
+
     print(f"Fold {fold + 1}/{args.num_folds} Starting...")
-    model = instantiate_model(args, hyperparams)
+    model = instantiate_model(hyperparams, args.pretrained)
 
     # Loggers
     csv_logger = FriendlyCSVLogger(f"{curr_results_dir}", name=f'fold{fold}', version=version_name)
@@ -334,12 +370,13 @@ def run(hyperparams, args, dm, fold=0, checkpoint=True, tune_hyperparams=False, 
         callbacks.append(TuneReportCallback({'val_loss': 'val_loss'}, on='validation_end'))
 
     trainer = Trainer(default_root_dir=f"{curr_results_dir}fold{fold}/version_{csv_logger.version}",
-                      gpus=1, num_sanity_val_steps=0,
+                      gpus=1,
+                      num_sanity_val_steps=0,
                       # log_every_n_steps=100,
-                      accumulate_grad_batches=args.accum_grad_batches,
-                      precision=args.precision,
-                      gradient_clip_val=args.gradient_clip_norm,
-                      max_epochs=args.stop_epoch,
+                      accumulate_grad_batches=None if 'baseline' in config['model'] else config['batch_size'],
+                      precision=config['precision'],
+                      gradient_clip_val=config['gradient_clip_norm'],
+                      max_epochs=config['stop_epoch'],
                       enable_checkpointing=checkpoint,
                       # stochastic_weight_avg=True,
                       callbacks=callbacks,
@@ -354,20 +391,42 @@ def run(hyperparams, args, dm, fold=0, checkpoint=True, tune_hyperparams=False, 
                     val_dataloaders=val_loader if args.include_validation else None)
 
     if test and not args.cv:
-        trainer.test(test_dataloaders=[dm.test_dataloader(), dm.st_test_dataloader(), dm.stan_test_dataloader(),
-                                       dm.ui_test_dataloader()], model=model)
+        trainer.test(model=model,
+                     test_dataloaders=[dm.test_dataloader(), dm.st_test_dataloader(), dm.stan_test_dataloader(),
+                                       dm.ui_test_dataloader(), dm.chop_test_dataloader()])
 
 
-def extract_embeddings(checkpoint_path, args, hyperparams, dm):
-    model = instantiate_model(args, hyperparams)
-    model = model.load_from_checkpoint(checkpoint_path)
-    val_loader = dm.val_dataloader()
-    embeds, labels, ids = model.extract_embeddings(val_loader)
+def extract(dataloaders, model, model_type="baseline", which="embed", save_dir=None, dset_name=None):
+    """Return dictionary or list of dictionaries, containing output or high-dimensional embeddings for
+    specified dataloader/s.
 
-    reducer = umap.UMAP(random_state=42)
-    umap_embeds = reducer.fit_transform(embeds)
+    @param dataloaders torch dataloader, or sequence-like of dataloaders
+    @param model torch model
+    @param model_type name of model
+    @param which specify to extract embedding or output (probabilities)
+    @param save_dir directory to save plot of embeddings
+    @param dset_name names for dataset/s (used in UMAP plot)
+    """
+    # If sequence of dataloaders, extract for each
+    if isinstance(dataloaders, list):
+        outputs = []
+        for i, dl in enumerate(dataloaders):
+            name = None if dset_name is None else dset_name[i]
+            outputs.append(extract(dl, model, model_type=model_type,
+                                   save_dir=save_dir, which=which, dset_name=name))
+        return outputs
 
-    plot_umap(umap_embeds, labels)
+    if which == "embed":
+        out, labels, ids = model.extract_embeddings(dataloaders)
+        plot_umap(out, labels, save_dir=f"{project_dir}/figures/",
+                  plot_name="UMAP of " + f"{dset_name} " if dset_name is not None else "" + f"Test Set ({model_type})")
+    else:  # outputs
+        out, labels, ids = model.extract_preds(dataloaders)
+
+    out_name = "embed" if which == "embed" else "pred"
+
+    results = {out_name: out.tolist(), "label": labels.tolist(), "ids": ids.tolist()}
+    return results
 
 
 # Main Methods
@@ -378,86 +437,69 @@ def main():
     args.augmentations_str = create_augmentation_str(args)
 
     # Paths
-    update_paths(args.model)
+    update_paths(args.model, args.pretrained)
 
     # If folder is non-existent, create folder for storing results
     if not os.path.isdir(curr_results_dir):
         os.makedirs(curr_results_dir)
 
-    # Save/load in the best hyperparameters if available
-    args.tune_hyperparameters = False
-    if not args.tune_hyperparameters:
-        hyperparams = {'lr': args.lr, "batch_size": args.batch_size,
-                       'adam': args.adam,
-                       'momentum': args.momentum,
-                       'weight_decay': args.weight_decay,
-                       # 'patience': args.early_stopping_patience,
-                       # 'num_epochs': args.epochs, 'stop_epoch': args.stop_epoch,
-                       # 'balance_classes': args.balance_classes,
-                       'include_cov': args.include_cov,
-                       'output_dim': args.output_dim,
-                       'dropout_rate': args.dropout_rate,
-                       'weighted_loss': args.weighted_loss,
-                       'stop_epoch': args.stop_epoch,
-                       'gradient_clip_norm': args.gradient_clip_norm,
-                       'precision': args.precision,
-                       'model': args.model,
-                       'augmented': args.augment_training,
-                       'augment_probability': args.augment_probability,
-                       'augmentations_str': args.augmentations_str
-                       }
+    if args.accum_grad_batches is None:
+        args.accum_grad_batches = 1
 
-        if args.load_hyperparameters:
-            load_hyperparameters(hyperparams, best_hyperparameters_folder)
+    hyperparams = {'lr': args.lr, "batch_size": args.batch_size * args.accum_grad_batches,
+                   'adam': args.adam,
+                   'momentum': args.momentum,
+                   'weight_decay': args.weight_decay,
+                   'include_cov': args.include_cov,
+                   'output_dim': args.output_dim,
+                   'dropout_rate': args.dropout_rate,
+                   'weighted_loss': args.weighted_loss,
+                   'stop_epoch': args.stop_epoch,
+                   'gradient_clip_norm': args.gradient_clip_norm,
+                   'precision': args.precision,
+                   'model': args.model,
+                   'augmented': args.augment_training,
+                   'augment_probability': args.augment_probability,
+                   'augmentations_str': args.augmentations_str
+                   }
 
-        data_params = {'batch_size': hyperparams['batch_size'],
-                       'shuffle': True,
-                       'num_workers': args.num_workers,
-                       'pin_memory': True,
-                       'persistent_workers': True if args.num_workers else False, }
+    if args.load_hyperparameters:
+        load_hyperparameters(hyperparams)
 
-        dm = KidneyDataModule(args, data_params)
-        dm.setup('fit')
-        dm.setup('test')
+    data_params = {'batch_size': args.batch_size,
+                   'shuffle': True,
+                   'num_workers': args.num_workers,
+                   'pin_memory': True,
+                   'persistent_workers': True if args.num_workers else False}
 
+    dm = KidneyDataModule(args, data_params)
+    dm.setup('fit')
+    dm.setup('test')
+
+    if not inference:
         for fold in range(5 if args.cv else 1):
-            run(hyperparams=hyperparams, args=args, dm=dm, fold=fold, checkpoint=False, train=not args.test_only,
-                test=False)
+            run(hyperparams, args=args, dm=dm, fold=fold,
+                checkpoint=not args.include_validation,
+                train=not args.test_only, test=args.include_test)
     else:
-        hyperparams = {'lr': tune.loguniform(1e-4, 1e-1), "batch_size": 128,
-                       'adam': True,
-                       'momentum': 0.9,
-                       'weight_decay': 5e-4,
-                       # 'patience': args.early_stopping_patience,
-                       # 'num_epochs': args.epochs, 'stop_epoch': args.stop_epoch,
-                       'loss_weights': (0.13, 0.87),
-                       'include_cov': True,
-                       'output_dim': 128,
-                       'dropout_rate': 0.5}
+        model_type = hyperparams['model']
+        model = instantiate_model(model_type, hyperparams, True)
+        test_loaders = [dm.test_dataloader(), dm.st_test_dataloader(), dm.stan_test_dataloader(),
+                        # dm.ui_test_dataloader(), dm.chop_test_dataloader()
+                        ]
 
-        # scheduler = ASHAScheduler(max_t=40, grace_period=1, reduction_factor=2)
-        scheduler = PopulationBasedTraining(perturbation_interval=4,
-                                            hyperparam_mutations={'lr': tune.loguniform(1e-4, 1e-1),
-                                                                  "batch_size": [1, 64, 128],
-                                                                  'adam': [True, False],
-                                                                  'momentum': [0.8, 0.9],
-                                                                  'weight_decay': [5e-4, 5e-3],
-                                                                  'loss_weights': [(0.5, 0.5), (0.13, 0.87)],
-                                                                  'output_dim': [128, 256, 512],
-                                                                  'dropout_rate': [0, 0.25, 0.5]
-                                                                  })
-        reporter = CLIReporter(parameter_columns=list(hyperparams.keys()), metric_columns=['val_loss'])
+        which = ['embed', 'pred'][1]
+        result_dicts = extract(test_loaders, model, model_type, which=which,
+                               dset_name=["SK Test", "SK Silent Trial", "Stanford"],
+                               save_dir=f"{project_dir}/figures/")
+        filename_map = {0: f"sk_test", 1: "st", 2: "stan", 3: "uiowa", 4: "chop"}
+        all_results = {}
+        for i in range(len(result_dicts)):
+            all_results[filename_map[i]] = result_dicts[i]
 
-        train_fn_with_parameters = tune.with_parameters(run, args=args)
-
-        analysis = tune.run(train_fn_with_parameters, resources_per_trial={'cpu': args.num_workers, 'gpu': 1},
-                            metric="val_loss", mode='min', config=hyperparams, num_samples=10,
-                            progress_reporter=reporter, scheduler=scheduler,
-                            name='tune_baseline_pbt')
-
-        print("Best hyperparameters found were:", analysis.best_config)
+        with open(f"{curr_results_dir}/{model_type}-test_output-{which}.json", "w") as f:
+            json.dump(all_results, f, indent=4)
 
 
 if __name__ == '__main__':
     main()
-    pass

@@ -13,10 +13,11 @@ import yaml
 
 
 class GridSearch:
+    model_type_: str
     timestamp_: str
     grid_search_dir_: str
-    model_type_: str
-    randomized: bool
+    metric: str
+    tested_combinations: pd.DataFrame
 
     def __init__(self, model_type_, timestamp_, grid_search_dir_, metric='loss'):
         self.model_type = model_type_
@@ -53,7 +54,7 @@ class GridSearch:
         available_columns = set(self.tested_combinations.columns.tolist())
         cols = list(search_columns.intersection(available_columns))
 
-        return list(sample_hyperparams.values()) in gridSearch.tested_combinations[cols].values.tolist()
+        return [sample_hyperparams[c] for c in cols] in gridSearch.tested_combinations[cols].values.tolist()
 
     def get_tested_hyperparams(self):
         dirs_ = self.get_training_dirs()
@@ -76,7 +77,7 @@ class GridSearch:
             if len(timestamp_split) <= 1:
                 next_timestamp = "None"
             else:
-                f"{timestamp_split[0]}-{timestamp_split[1]}-{(int(timestamp_split[-1]) + 1)}"
+                next_timestamp = f"{timestamp_split[0]}-{timestamp_split[1]}-{(int(timestamp_split[-1]) + 1)}"
 
             temp_folders = []
             for i in all_dirs:
@@ -108,6 +109,8 @@ class GridSearch:
             # Add in parameters
             params = get_hyperparams(dir_)
             for key in params:
+                if key == "insert_where" and datetime.strptime(dir_.split('_')[-2], "%Y-%m-%d").day < 8:
+                    params[key] = 0
                 df_best_epoch[key] = params[key]
 
             df_best_epoch["dir"] = dir_
@@ -133,7 +136,7 @@ class GridSearch:
             return
 
         print(params)
-        command_str = f'python "{project_dir}/drivers/model_training.py" '
+        command_str = f'python "{project_dir}/op/model_training.py" '
         for u in params.keys():
             v = params[u]
             if not isinstance(v, bool):
@@ -173,6 +176,15 @@ def aggregate_fold_histories(dir_: str):
 
     df = df.groupby(by=["epoch"]).mean().reset_index()
 
+    for col in df.columns.tolist():
+        if "_" not in col or "loss" in col:
+            continue
+        if ('train' not in col) and ('test' not in col) and ('val' not in col):
+            continue
+
+        if all(df[col] < 1):
+            df[col] = (df[col] * 100).round(decimals=2)
+
     return df
 
 
@@ -197,11 +209,11 @@ def get_hyperparams(dir_: str):
 if __name__ == "__main__":
     # Global variables
     project_dir = "C:/Users/Stanley Hua/projects/temporal_hydronephrosis/"
-    model_type = "Siamese_EfficientNet"
+    model_type = "Siamese_TSM"
     keep_best_weights = False
 
     timestamp = datetime.now().strftime("%Y-%m-%d")
-    timestamp = 'augmentations'
+    timestamp = '2022-02-05'
     grid_search_dir = f"{project_dir}/results/{model_type}{'_' if (len(model_type) > 0) else ''}grid_search({timestamp})/"
 
     if not os.path.exists(grid_search_dir):
@@ -209,28 +221,25 @@ if __name__ == "__main__":
 
     search_space = {
         # 'lr': [1e-3, 1e-5, 1e-4],
-        # "batch_size": [1, 16, 64, 128],
+        # "batch_size": [1, 16, 64],
         # 'adam': [True, False],
         # 'momentum': [0.8, 0.9],
         # 'weight_decay': [5e-4, 5e-3],
-        # 'weighted_loss': [0.5, 0.87],
+        # 'weighted_loss': 0.5,
         # 'output_dim': [128, 256, 512],
-        'dropout_rate': [0.5],
-        # 'gradient_clip_norm': [0.5, 2, 4],
-        'gradient_clip_norm': 1,
-        'precision': 32,
-        'augment_training': True,
-        'augment_probability': 0.5,      # [0.25, 0.5, 0.75],
-        'normalize': True,
+        # 'dropout_rate': [0, 0.25, 0.5],
+        # 'precision': 16,
+        # 'augment_training': True,
+        # 'augment_probability': 0.5,      # [0.25, 0.5, 0.75],
+        # 'normalize': True,
         # 'random_rotation': [True, False],
         # 'color_jitter': [True, False],
-        'random_gaussian_blur': True,
+        # 'random_gaussian_blur': True,
         # 'random_motion_blur': [True, False],
         # 'random_noise': [True, False],
-        'include_cov': False,
-        'model': 'baseline'
+        'model': ['conv_pool', 'tsm']
     }
 
     gridSearch = GridSearch(model_type, timestamp, grid_search_dir, metric='auprc')
-    # gridSearch.perform_grid_search(search_space, n=1)
+    # gridSearch.perform_grid_search(search_space, n=2)
     gridSearch.save_grid_search_results()
