@@ -8,13 +8,8 @@ from collections import defaultdict
 import numpy as np
 import torch
 from sklearn.utils import resample
+import pandas as pd
 from torchmetrics.functional import accuracy, auroc, average_precision
-
-TEST_NAMES = {"sk_test": "SickKids Test Set",
-              "st": "SickKids Silent Trial",
-              "stan": "Stanford",
-              "uiowa": "UIowa",
-              "chop": "CHOP"}
 
 
 def bootstrap_ci(preds, labels, n=1000, alpha=0.05, metric_fn=accuracy):
@@ -47,6 +42,8 @@ def bootstrap_results(results):
     :param results dictionary where each key is a test set pointing to a dictionary of labels, target and
     model predictions for that test set.
     """
+    global TEST_NAMES
+
     metrics = defaultdict(dict)
 
     for dset in list(results.keys()):
@@ -61,8 +58,9 @@ def bootstrap_results(results):
         print()
 
         # Accumulate metrics
-        metrics[dset]['AUROC'] = f"{_auroc} [{auroc_bounds[0]}, {auroc_bounds[1]}]"
-        metrics[dset]['AUPRC'] = f"{_auprc} [{auprc_bounds[0]}, {auprc_bounds[1]}]"
+        test_set_name = TEST_NAMES[dset]
+        metrics[test_set_name]['AUROC'] = f"{_auroc} [{auroc_bounds[0]}, {auroc_bounds[1]}]"
+        metrics[test_set_name]['AUPRC'] = f"{_auprc} [{auprc_bounds[0]}, {auprc_bounds[1]}]"
 
     return metrics
 
@@ -72,39 +70,39 @@ if __name__ == '__main__':
     #           "r") as f:
     #     results = json.load(f)
     # uiowa_results = results['ui']['1']['30']
-    which = ["embed", "pred"][1]
-    results_dir = "C:/Users/Stanley Hua/projects/temporal_hydronephrosis/results/"
-    if which == 'embed':
-        curr_results_dir = f"{results_dir}Pretrained_Siamese_Baseline_2022-02-11_22-34-18/"
-        filename = f"{curr_results_dir}/baseline-test_output-{which}.json"
-    else:
-        # curr_results_dir = f"{results_dir}Pretrained_Siamese_Baseline_2022-02-10_23-29-33/"
-        # filename = f"{curr_results_dir}/baseline-test_output.json"
 
-        # curr_results_dir = f"{results_dir}Pretrained_Siamese_Baseline_2022-02-14_10-19-32(multi-visit)"
-        # filename = f"{curr_results_dir}/baseline-test_output-{which}.json"
+    TEST_NAMES = {"sk_test": "SickKids Test Set",
+                  "st": "SickKids Silent Trial",
+                  "stan": "Stanford",
+                  "uiowa": "UIowa",
+                  "chop": "CHOP"}
 
-        # curr_results_dir = f"{results_dir}Pretrained_Siamese_AvgPred_2022-02-14_10-28-30(multi-visit)"
-        # filename = f"{curr_results_dir}/avg_pred-test_output-{which}.json"
+    RESULTS_DIR = "C:/Users/Stanley Hua/projects/temporal_hydronephrosis/results/final/"
 
-        curr_results_dir = f"{results_dir}Pretrained_Siamese_ConvPooling_2022-02-14_10-32-00(multi-visit)"
-        filename = f"{curr_results_dir}/conv_pool-test_output-{which}.json"
+    MODEL_NAMES = {"baseline": "Baseline", "pretrained-avg_pred": "(Pretrained) Avg. Prediction",
+                   "pretrained-conv_pool": "(Pretrained) Conv. Pooling", "pretrained-tsm(last)": "(Pretrained) TSM",
+                   "avg_pred": "Avg. Prediction", "conv_pool": "Conv. Pooling", "lstm": "LSTM", "tsm": "TSM"}
 
-    with open(filename, "r") as f:
-        results = json.load(f)
+    MODEL_NAMES = {"baseline(first_visit)": "Baseline (First Visit)",
+                   "baseline": "Baseline (Last Visit)"}
 
-    if which == "embed":
-        embeds = np.array(results['sk_test']['embed'])
-        labels = np.array(results['sk_test']['label'])
-        ids = results['sk_test']['ids']
+    which = "pred"
+    from_baseline = False
 
-        reducer = UMAP(random_state=42)
-        umap_embeds = reducer.fit_transform(embeds)
+    df_results = pd.DataFrame()
 
-        df = pd.DataFrame(umap_embeds)
-        df['label'] = labels
-        df['ids'] = ids
-        df.loc[(df[0] > 7.27) & (df.label == 0)].ids.map(lambda x: "_".join(x.split("_")[:2])).tolist()
-    else:
+    for model in MODEL_NAMES:
+        with open(f"{RESULTS_DIR}/{model}-test_output-pred.json", "r") as f:
+            results = json.load(f)
+
         metrics = bootstrap_results(results)
+        df_metrics = pd.DataFrame(metrics).T.reset_index()
+        df_metrics['Model'] = MODEL_NAMES[model]
+        df_metrics = df_metrics.rename(columns={'index': "Dataset"})
+        df_metrics = df_metrics[["Dataset", "Model", "AUROC", "AUPRC"]]
 
+        df_results = pd.concat([df_results, df_metrics], ignore_index=True)
+
+    df_results = df_results.sort_values(by=["Dataset", "Model"])
+
+    df_results.to_csv(f"{RESULTS_DIR}/results.csv", index=False)

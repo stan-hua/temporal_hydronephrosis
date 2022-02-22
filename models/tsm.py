@@ -5,24 +5,83 @@ Due to variable sequence length, <n_segment> in TemporalShift block is assigned 
 shifted temporally for every channel.
 """
 
-import numpy as np
-import torch
-from torch import nn
-
 from models.baseline import SiamNet
 from models.tsm_blocks import *
+from utilities.kornia_augmentation import DataAugmentation
 
 
 # noinspection PyTypeChecker,PyUnboundLocalVariable
 class SiamNetTSM(SiamNet):
-    def __init__(self, model_hyperparams=None, augmentation=None):
-        super().__init__(model_hyperparams, augmentation)
+    def __init__(self, augmentation: DataAugmentation = None,
+                 adam=False, momentum=0.9, weight_decay=0.0005, dropout_rate=0.5, include_cov=False,
+                 lr=0.005, output_dim=256, weighted_loss=0.5, model_hyperparams=None):
+        self.save_hyperparameters()
+        if model_hyperparams is not None:
+            super().__init__(augmentation=augmentation, model_hyperparams=model_hyperparams)
+        else:
+            super().__init__(augmentation=augmentation, model_hyperparams=self.hparams)
 
-        self.shift = TemporalShift(n_segment=1, inplace=True)
+        self.shift = TemporalShift(inplace=True)
 
-    def alt_forward(self, data):
+    def forward(self, data):
         """Batch of images correspond to the images for one patient, where it is of the form (T,V,H,W).
         V refers to ultrasound view/plane (sagittal, transverse) and T refers to number of time points.
+
+        Perform conv. pooling to pool temporal features.
+        """
+        x = data['img']
+        x = torch.div(x, 255)
+
+        if len(x.size()) == 5:
+            x = x[0]
+
+        T, V, H, W = x.size()
+        x = x.transpose(0, 1)
+        x_list = []
+        for i in range(2):  # extract features for each US plane (sag, trv)
+            z = torch.unsqueeze(x[i], 1)
+            z = z.expand(-1, 3, -1, -1)
+            z = self.conv1(z)
+
+            z = self.shift(z)
+            z = self.conv2(z)
+
+            z = self.shift(z)
+            z = self.conv3(z)
+
+            z = self.shift(z)
+            z = self.conv4(z)
+
+            z = self.shift(z)
+            z = self.conv5(z)
+
+            z = self.shift(z)
+            z = self.conv6(z)
+
+            z = self.shift(z)
+            z = self.conv7(z)
+
+            z = z.view([T, 1, -1])
+            z = self.fc8(z)
+            z = z.view([T, 1, -1])
+            x_list.append(z)
+
+        x = torch.cat(x_list, 1)
+        x = x.view(T, -1)
+
+        # Get features at last visit (time point)
+        x = x[-1:, :]
+
+        x = self.fc9(x)
+        x = self.fc10(x)
+
+        return torch.log_softmax(x, dim=1)
+
+    def alt_forward_avg(self, data):
+        """Batch of images correspond to the images for one patient, where it is of the form (T,V,H,W).
+        V refers to ultrasound view/plane (sagittal, transverse) and T refers to number of time points.
+
+        Perform average prediction to pool temporal features.
         """
         x = data['img']
         x = torch.div(x, 255)
@@ -79,9 +138,11 @@ class SiamNetTSM(SiamNet):
 
         return torch.log_softmax(x, dim=1)
 
-    def forward(self, data):
+    def alt_forward_conv(self, data):
         """Batch of images correspond to the images for one patient, where it is of the form (T,V,H,W).
         V refers to ultrasound view/plane (sagittal, transverse) and T refers to number of time points.
+
+        Perform conv. pooling to pool temporal features.
         """
         x = data['img']
         x = torch.div(x, 255)

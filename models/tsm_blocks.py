@@ -13,9 +13,8 @@ import torch.nn.functional as F
 
 
 class TemporalShift(nn.Module):
-    def __init__(self, n_segment=4, n_div=8, inplace=False):
+    def __init__(self, n_div=8, inplace=False):
         super(TemporalShift, self).__init__()
-        self.n_segment = n_segment
         self.fold_div = n_div
         self.inplace = inplace
         if inplace:
@@ -23,20 +22,20 @@ class TemporalShift(nn.Module):
         print('=> Using fold div: {}'.format(self.fold_div))
 
     def forward(self, x):
-        return self.shift(x, self.n_segment, fold_div=self.fold_div, inplace=self.inplace)
-
+        return self.shift(x, fold_div=self.fold_div, inplace=self.inplace)
 
     @staticmethod
-    def shift(x, n_segment, fold_div=3, inplace=False):
-        nt, c, h, w = x.size()
+    def shift(x, fold_div=3, inplace=False):
+        """Modified to shift whole portion of feature map completely across time. If input has only 1 time point,
+        no shift is performed."""
+        T, C, H, W = x.size()
 
-        if nt == 1:     # MODIFIED: If input has only 1 time point, no shift is performed.
+        if T == 1:
             return x
 
-        n_batch = nt // n_segment
-        x = x.view(n_batch, n_segment, c, h, w)
+        x = x.view(1, T, C, H, W)
 
-        fold = c // fold_div
+        fold = C // fold_div
         if inplace:
             # Due to some out of order error when performing parallel computing.
             # May need to write a CUDA kernel.
@@ -48,7 +47,7 @@ class TemporalShift(nn.Module):
             out[:, 1:, fold: 2 * fold] = x[:, :-1, fold: 2 * fold]  # shift right
             out[:, :, 2 * fold:] = x[:, :, 2 * fold:]  # not shift
 
-        return out.view(nt, c, h, w)
+        return out.view(T, C, H, W)
 
 
 class InplaceShift(torch.autograd.Function):

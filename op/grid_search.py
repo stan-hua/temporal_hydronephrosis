@@ -213,7 +213,7 @@ if __name__ == "__main__":
     keep_best_weights = False
 
     timestamp = datetime.now().strftime("%Y-%m-%d")
-    timestamp = '2022-02-05'
+    # timestamp = '2022-02-05'
     grid_search_dir = f"{project_dir}/results/{model_type}{'_' if (len(model_type) > 0) else ''}grid_search({timestamp})/"
 
     if not os.path.exists(grid_search_dir):
@@ -237,9 +237,9 @@ if __name__ == "__main__":
         # 'random_gaussian_blur': True,
         # 'random_motion_blur': [True, False],
         # 'random_noise': [True, False],
-        'model': ['conv_pool', 'tsm']
+        'model': ["baseline",] # "avg_pred", "conv_pool", "tsm"]
     }
 
     gridSearch = GridSearch(model_type, timestamp, grid_search_dir, metric='auprc')
-    # gridSearch.perform_grid_search(search_space, n=2)
-    gridSearch.save_grid_search_results()
+    gridSearch.perform_grid_search(search_space, n=12)
+    # gridSearch.save_grid_search_results()

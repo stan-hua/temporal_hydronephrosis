@@ -52,9 +52,8 @@ class KidneyDataModule(pl.LightningDataModule):
                                                                                                data_dir=args.data_dir,
                                                                                                seq=not args.single_visit,
                                                                                                include_baseline_date=args.ordered_validation)
-            # Prepare data into sequences
 
-            # Split into train-validation sets
+            # Split into train-validation sets via ID indexing
             if args.include_validation:
                 train_labels = list(train_label_dict.values())
                 if args.cv:
@@ -194,24 +193,15 @@ class KidneyDataset(torch.utils.data.Dataset):
     def __len__(self):
         return len(self.study_ids)
 
-    # def get_class_proportions(self):
-    #     """Returns an array of values inversely proportional to the number of items in the class. Classes with a greater
-    #     number of examples compared to other classes receives lesser weight.
-    #     """
-    #     counts = np.bincount(self.y)
-    #     labels_weights = 1. / counts
-    #     weights = labels_weights[self.y]
-    #     return weights
-
 
 def load_dataset(json_infile, test_prop, data_dir, ordered_split=False, train_only=False):
     """Return dictionaries of train (and optionally test) set, where each key is the study ID of some patient.
 
-    @param json_infile: json containing information about each patient and file paths to each kidney side
-    @param test_prop: proportion to leave as test set
-    @param data_dir: path to directory containing files
-    @param ordered_split: sort by date before splitting by patient id
-    @param train_only: split dataset into train-test split if true
+    :param json_infile: json containing information about each patient and file paths to each kidney side
+    :param test_prop: proportion to leave as test set
+    :param data_dir: path to directory containing files
+    :param ordered_split: sort by date before splitting by patient id
+    :param train_only: split dataset into train-test split if true
     """
     with open(data_dir + json_infile, 'r') as fp:
         in_dict = json.load(fp)

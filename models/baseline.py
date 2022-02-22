@@ -12,35 +12,20 @@ from utilities.kornia_augmentation import DataAugmentation
 
 
 class SiamNet(pl.LightningModule):
-    def __init__(self, model_hyperparams=None, augmentation: DataAugmentation = None):
+    def __init__(self, augmentation: DataAugmentation = None,
+                 adam=False, momentum=0.9, weight_decay=0.0005, dropout_rate=0.5, include_cov=False,
+                 lr=0.005, output_dim=256, weighted_loss=0.5, model_hyperparams=None):
         """
-        :param model_hyperparams: dictionary/namespace containing the following hyperparameters...
-            lr: learning rate number
-            batch_size: batch size number
-            adam: boolean value. If true, use adam optimizer. Otherwise, SGD is used.
-            include_cov: include covariate layers in input and forward pass
-            dropout_rate: dropout rate for linear layers fc8, fc9
-            weighted_loss: weight between (0, 1) to assign to positive class. Negative class receives 1 - weighted_loss.
-            output_dim: dimensionality of features in layer before prediction layer
-            stop_epoch: epoch at which to stop at
+        :param augmentation Sequential module for data augmentation
+        :param model_hyperparams Alternative way to feed hyperparameters through dictionary
         """
         super(SiamNet, self).__init__()
 
         self.updated_naming = True
 
-        if model_hyperparams is None:
-            model_hyperparams = {'adam': False,
-                                 'dropout_rate': 0.5,
-                                 'include_cov': False,
-                                 'lr': 0.005,
-                                 'momentum': 0.9,
-                                 'output_dim': 256,
-                                 'weight_decay': 0.0005,
-                                 'weighted_loss': 0.5
-                                 }
-
-        # Save hyperparameters to checkpoint
-        self.save_hyperparameters(model_hyperparams)
+        # Update hyperparameters if given in dictionary
+        if model_hyperparams is not None:
+            self.save_hyperparameters(model_hyperparams)
 
         # For image augmentation
         self.augmentation = augmentation
@@ -437,39 +422,3 @@ class LRN(nn.Module):
 
         x = x.div(div)
         return x
-
-
-if __name__ == '__main__':
-    hyperparams = {'lr': 0.001, "batch_size": 16,
-                   'adam': True,
-                   'momentum': 0.9,
-                   'weight_decay': 0.0005,
-                   'include_cov': False,
-                   'output_dim': 128,
-                   'dropout_rate': 0,
-                   'weighted_loss': 0.5,
-                   'stop_epoch': 40
-                   }
-    model = SiamNet(hyperparams)
-
-    shared_dir = "C:/Users/Stanley Hua/SickKids/Lauren Erdman - HN_Stanley/"
-
-
-    # model.load("C:/Users/Stanley Hua/SickKids/Lauren Erdman - HN_Stanley/ModelWeights/NoFinalLayerFineTuneNoCov_v2_TrainOnly_40epochs_bs16_lr0.001_RCFalse_covFalse_OSFalse_30thEpoch.pth")
-
-    def simulate(n=100):
-        data = {"img": torch.from_numpy(np.random.rand(n, 2, 256, 256)).type(torch.FloatTensor),
-                "Age_wks": torch.from_numpy((np.random.rand(n) * 40).round()).type(torch.FloatTensor),
-                "Side_L": torch.from_numpy(np.random.randint(0, 2, n)).type(torch.FloatTensor)}
-        labels = np.random.randint(0, 2, n)
-        output_ = model.forward(data)
-        # reducer_ = umap.UMAP(random_state=42)
-        # embeds_ = reducer_.fit_transform(output_)
-        # plot_umap(embeds_, labels)
-
-
-    # simulate(100)
-
-    results = json.load(open(
-        f"{shared_dir}Results/NoFinalLayerFineTuneNoCov_v2_TrainOnly_40epochs_bs16_lr0.001_RCFalse_covFalse_OSFalse.json",
-        "r"))

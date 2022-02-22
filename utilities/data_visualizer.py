@@ -67,19 +67,19 @@ class DataViewer:
         """Returns proportion of samples that are positive."""
         return self.df_cov["surgery"].mean()
 
-    def plot_num_visits(self, title=None):
-        fig, ax = plt.subplots()
+    def plot_num_visits(self, title=None, ax=None):
+        if ax is None:
+            fig, ax = plt.subplots()
         sns.histplot(data=self.df_examples, x='num_visits', hue='surgery', discrete=True, multiple='stack',
                      ax=ax)
-        plt.xticks(np.arange(min(self.df_examples['num_visits']), max(self.df_examples['num_visits']) + 1, 1))
-        plt.xlabel("Number of Visits")
-        plt.ylabel("Count")
+        ax.set_xticks(np.arange(min(self.df_examples['num_visits']), max(self.df_examples['num_visits']) + 1, 1))
+        ax.set_xlabel("Number of Visits")
+        ax.set_ylabel("Count")
 
         if title is not None:
-            plt.title(title)
+            ax.set_title(title)
 
         plt.tight_layout()
-        plt.show()
 
     def plot_age(self, title=None):
         fig, ax = plt.subplots()
@@ -147,30 +147,44 @@ def load_data():
     return dm
 
 
-def describe_data(data_dicts, plot_title=None):
+def describe_data(data_dicts, plot_title=None, ax=None):
     img_dict, label_dict, cov_dict, study_ids = data_dicts
 
     data_viewer = DataViewer(img_dict, label_dict, cov_dict, study_ids)
-    data_viewer.plot_age(title=plot_title)
-    plt.show()
-    data_viewer.plot_num_visits(title=plot_title)
+    # data_viewer.plot_age(title=plot_title)
+    # plt.show()
+    data_viewer.plot_num_visits(title=plot_title, ax=ax)
 
     return data_viewer, data_viewer.df_cov, data_viewer.df_examples
 
 
 if __name__ == "__main__":
-
     dm = load_data()
+
+    fig, axs = plt.subplots(2, 2, constrained_layout=True)
 
     # train_viewer, df_train_cov, df_train_examples = describe_data(dm.train_dicts, plot_title='Ordered Training Set')
     # val_viewer, df_val_cov, df_val_examples = describe_data(dm.val_dicts, plot_title='Ordered Validation Set')
-    # test_viewer, df_test_cov, df_test_examples = describe_data(dm.test_set, plot_title='Unordered Test Set')
-    #
-    # stan_viewer, df_stan_cov, df_stan_examples = describe_data(dm.stan_test_set, plot_title='Stanford Data')
-    st_viewer, df_st_cov, df_st_examples = describe_data(dm.st_test_set, plot_title='SickKids Silent Trial Data')
-    ui_viewer, df_ui_cov, df_ui_examples = describe_data(dm.ui_test_set, plot_title='UIowa Data')
-    # chop_viewer, df_chop_cov, df_chop_examples = describe_data(dm.chop_test_set, plot_title='CHOP Data')
+    test_viewer, df_test_cov, df_test_examples = describe_data(dm.test_set, plot_title='SickKids Test Set', ax=axs[0][0])
 
+    st_viewer, df_st_cov, df_st_examples = describe_data(dm.st_test_set, plot_title='SickKids Silent Trial', ax=axs[0][1])
+    stan_viewer, df_stan_cov, df_stan_examples = describe_data(dm.stan_test_set, plot_title='Stanford', ax=axs[1][0])
+    # ui_viewer, df_ui_cov, df_ui_examples, ui_fig = describe_data(dm.ui_test_set, plot_title='UIowa Data')
+    chop_viewer, df_chop_cov, df_chop_examples = describe_data(dm.chop_test_set, plot_title='CHOP', ax=axs[1][1])
+
+    fig.suptitle("Distribution of Repeated Hospital Visits")
+    fig.tight_layout()
+
+    handles = axs[1][1].get_legend().legendHandles
+    axs[0][0].get_legend().remove()
+    axs[0][1].get_legend().remove()
+    axs[1][0].get_legend().remove()
+    axs[1][1].get_legend().remove()
+
+    fig.subplots_adjust(bottom=0.18)
+    fig.legend(handles=handles, labels=["Negative", "Positive"], loc=8, ncol=2)
+
+if False:
     img_dict = dm.st_test_set[0]
     df = df_st_cov
 

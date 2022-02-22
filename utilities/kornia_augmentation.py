@@ -43,3 +43,57 @@ class DataAugmentation(nn.Module):
         if self._mode == 'eval':
             x = self.augmentations(x)
         return x
+
+
+def create_augmentation_str(args):
+    """Create string from augmentations enabled."""
+    if not args.augment_training:
+        return ""
+
+    augmentations = []
+
+    if args.normalize:
+        augmentations.append("normalize")
+    if args.random_rotation:
+        augmentations.append("rotate")
+    if args.color_jitter:
+        augmentations.append("color_jitter")
+    if args.random_gaussian_blur:
+        augmentations.append("gaussian_blur")
+    if args.random_motion_blur:
+        augmentations.append("motion_blur")
+    if args.random_noise:
+        augmentations.append("gaussian_noise")
+
+    augmentations_str = "-".join(augmentations)
+
+    return augmentations_str
+
+
+def parse_augmentation_str(s: str):
+    s_split = s.split("-")
+
+    augmentations = {}
+    for aug in ["normalize", "random_rotation", "color_jitter", "random_gaussian_blur", "random_motion_blur",
+                "random_noise"]:
+        augmentations[aug] = aug in s_split
+
+    return augmentations
+
+
+def instantiate_augmenter(hyperparams):
+    """Instantiate image data augmentation object based on arguments. Return augmenter and name (given by all
+    augmentation types enabled)."""
+    if hyperparams is None:
+        return None
+
+    if not hyperparams['augmented'] or hyperparams['model'] is not 'baseline':
+        return None
+
+    augs = parse_augmentation_str(hyperparams['augmentations_str'])
+    augmenter = DataAugmentation(normalize=augs['normalize'], random_rotation=augs['random_rotation'],
+                                 color_jitter=augs['color_jitter'], random_gaussian_blur=augs['random_gaussian_blur'],
+                                 random_motion_blur=augs['random_motion_blur'], random_noise=augs['random_noise'],
+                                 prob=hyperparams['augment_probability'])
+
+    return augmenter

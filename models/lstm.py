@@ -11,10 +11,15 @@ from models.baseline import SiamNet
 
 # noinspection PyTypeChecker,PyUnboundLocalVariable
 class SiamNetLSTM(SiamNet):
-    def __init__(self, model_hyperparams=None, n_lstm_layers=1, hidden_dim=256, bidirectional=False, insert_where=0):
-        super().__init__(model_hyperparams)
-        if 'n_lstm_layers' not in model_hyperparams:
-            self.save_hyperparameters("n_lstm_layers", "hidden_dim", "bidirectional", "insert_where")
+    def __init__(self, augmentation=None,
+                 adam=False, momentum=0.9, weight_decay=0.0005, dropout_rate=0.5, include_cov=False,
+                 lr=0.005, output_dim=256, weighted_loss=0.5,
+                 n_lstm_layers=1, hidden_dim=256, bidirectional=False, insert_where=0, model_hyperparams=None):
+        self.save_hyperparameters()
+        if model_hyperparams is not None:
+            super().__init__(augmentation=augmentation, model_hyperparams=model_hyperparams)
+        else:
+            super().__init__(augmentation=augmentation, model_hyperparams=self.hparams)
 
         # Change linear layers
         if self.hparams.insert_where == 0:
@@ -193,4 +198,3 @@ if __name__ == '__main__':
 
 
     simulate()
-
