@@ -64,7 +64,7 @@ class Results:
         self.all_pred_label_train_tensor, self.all_pred_label_val_tensor, self.all_pred_label_test_tensor = None, None, None
 
     def concat_results(self):
-        """HELPER FUNCTION. Concatenates targets, predicted label and prediction probabilities."""
+        """HELPER FUNCTION. Concatenate targets, predicted label and prediction probabilities."""
         if "train" in self.dsets:
             self.all_targets_train_tensor = torch.cat(self.all_targets_train)
             self.all_pred_prob_train_tensor = torch.cat(self.all_pred_prob_train)

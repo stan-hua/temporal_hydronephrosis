@@ -4,18 +4,14 @@
     <option name="SCOPE_TYPE" value="3" />
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="2e439ead-1cec-4da4-9021-fd0df7818330" name="Changes" comment="- Renamed folders. &#10;- Added bootstrap for creating CI for AUROC and AUPRC&#10;- Now considers data with invalid age covariate&#10;- Now loading pretraind model does not require model_hyperparams.">
+    <list default="true" id="2e439ead-1cec-4da4-9021-fd0df7818330" name="Changes" comment="# Updated models to fix loading model from checkpoint. &#10;# Fixed TSM shifts.&#10;# Cleaned up code in model_training.py.">
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/models/baseline.py" beforeDir="false" afterPath="$PROJECT_DIR$/models/baseline.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/models/lstm.py" beforeDir="false" afterPath="$PROJECT_DIR$/models/lstm.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/models/tsm.py" beforeDir="false" afterPath="$PROJECT_DIR$/models/tsm.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/models/tsm_blocks.py" beforeDir="false" afterPath="$PROJECT_DIR$/models/tsm_blocks.py" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/op/grid_search.py" beforeDir="false" afterPath="$PROJECT_DIR$/op/grid_search.py" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/op/model_training.py" beforeDir="false" afterPath="$PROJECT_DIR$/op/model_training.py" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/utilities/bootstrap_ci.py" beforeDir="false" afterPath="$PROJECT_DIR$/utilities/bootstrap_ci.py" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/utilities/data_visualizer.py" beforeDir="false" afterPath="$PROJECT_DIR$/utilities/data_visualizer.py" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/utilities/dataset_prep.py" beforeDir="false" afterPath="$PROJECT_DIR$/utilities/dataset_prep.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/utilities/kornia_augmentation.py" beforeDir="false" afterPath="$PROJECT_DIR$/utilities/kornia_augmentation.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/utilities/results.py" beforeDir="false" afterPath="$PROJECT_DIR$/utilities/results.py" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -287,9 +283,9 @@
     <recent_temporary>
       <list>
         <item itemvalue="Python.bootstrap_ci" />
+        <item itemvalue="Python.grid_search" />
         <item itemvalue="Python.model_training" />
         <item itemvalue="Python.data_visualizer" />
-        <item itemvalue="Python.grid_search" />
         <item itemvalue="Python.lstm" />
       </list>
     </recent_temporary>
@@ -415,7 +411,14 @@
       <option name="project" value="LOCAL" />
       <updated>1644890507745</updated>
     </task>
-    <option name="localTasksCounter" value="17" />
+    <task id="LOCAL-00017" summary="# Updated models to fix loading model from checkpoint. &#10;# Fixed TSM shifts.&#10;# Cleaned up code in model_training.py.">
+      <created>1645556251963</created>
+      <option name="number" value="00017" />
+      <option name="presentableId" value="LOCAL-00017" />
+      <option name="project" value="LOCAL" />
+      <updated>1645556251963</updated>
+    </task>
+    <option name="localTasksCounter" value="18" />
     <servers />
   </component>
   <component name="Vcs.Log.Tabs.Properties">
@@ -460,7 +463,8 @@
     <MESSAGE value="Add experimental Siamese EfficientNet baseline. Renamed pl files to replace original (model_training_pl.py -&gt; model_training.py, baseline_pl.py -&gt; baseline.py). Updated all models (modified TSM)" />
     <MESSAGE value="Add experimental Siamese EfficientNet baseline. Renamed pl files to replace original (model_training_pl.py -&gt; model_training.py, baseline_pl.py -&gt; baseline.py). Updated all models (modified TSM).&#10;&#10;Current model_training.py working with Siamese EfficientNet (resized images to 260x260 in KidneyDataset in dataset_prep.py)" />
     <MESSAGE value="- Renamed folders. &#10;- Added bootstrap for creating CI for AUROC and AUPRC&#10;- Now considers data with invalid age covariate&#10;- Now loading pretraind model does not require model_hyperparams." />
-    <option name="LAST_COMMIT_MESSAGE" value="- Renamed folders. &#10;- Added bootstrap for creating CI for AUROC and AUPRC&#10;- Now considers data with invalid age covariate&#10;- Now loading pretraind model does not require model_hyperparams." />
+    <MESSAGE value="# Updated models to fix loading model from checkpoint. &#10;# Fixed TSM shifts.&#10;# Cleaned up code in model_training.py." />
+    <option name="LAST_COMMIT_MESSAGE" value="# Updated models to fix loading model from checkpoint. &#10;# Fixed TSM shifts.&#10;# Cleaned up code in model_training.py." />
   </component>
   <component name="XDebuggerManager">
     <breakpoint-manager>

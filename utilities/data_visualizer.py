@@ -69,7 +69,7 @@ class DataViewer:
 
     def plot_num_visits(self, title=None, ax=None):
         if ax is None:
-            fig, ax = plt.subplots()
+            fig_, ax = plt.subplots()
         sns.histplot(data=self.df_examples, x='num_visits', hue='surgery', discrete=True, multiple='stack',
                      ax=ax)
         ax.set_xticks(np.arange(min(self.df_examples['num_visits']), max(self.df_examples['num_visits']) + 1, 1))
@@ -82,7 +82,7 @@ class DataViewer:
         plt.tight_layout()
 
     def plot_age(self, title=None):
-        fig, ax = plt.subplots()
+        fig_, ax = plt.subplots()
         sns.histplot(data=self.df_cov, x='Age_wks', hue='surgery', multiple='stack', ax=ax)
         plt.xlabel("Age (in weeks)")
         plt.ylabel("Count")
@@ -137,14 +137,14 @@ def load_data():
                    'pin_memory': True,
                    'persistent_workers': True if args.num_workers else False}
 
-    dm = KidneyDataModule(args, data_params)
-    dm.setup('fit')
-    dm.setup('test')
-    dm.fold = 0
-    dm.train_dataloader()  # to save training set to object
-    dm.val_dataloader()  # to save validation set to object
+    dm_ = KidneyDataModule(args, data_params)
+    dm_.setup('fit')
+    dm_.setup('test')
+    dm_.fold = 0
+    dm_.train_dataloader()  # to save training set to object
+    dm_.val_dataloader()  # to save validation set to object
 
-    return dm
+    return dm_
 
 
 def describe_data(data_dicts, plot_title=None, ax=None):
@@ -183,32 +183,3 @@ if __name__ == "__main__":
 
     fig.subplots_adjust(bottom=0.18)
     fig.legend(handles=handles, labels=["Negative", "Positive"], loc=8, ncol=2)
-
-if False:
-    img_dict = dm.st_test_set[0]
-    df = df_st_cov
-
-    import torch
-    from op.model_training import instantiate_model
-    import numpy as np
-
-    model = instantiate_model("baseline", None, True)
-
-    fig, axs = plt.subplots(1, 2)
-    while not plt.waitforbuttonpress():
-        axs[0].clear()
-        axs[1].clear()
-        example = df.sample(n=1)
-        print(example)
-        idx = example['index'].iloc[0]
-
-        data = {'img': torch.div(torch.unsqueeze(torch.FloatTensor(img_dict[idx]), 0), 255)}
-        pred = model(data).detach().numpy()
-        prob = np.exp(pred)
-        print(f"Label: {example['surgery'].iloc[0]}")
-        print(f"Prediction: {np.argmax(pred)} ({np.exp(pred[0][1])})")
-        axs[0].imshow(img_dict[idx][0], cmap="gray")
-        axs[1].imshow(img_dict[idx][1], cmap="gray")
-
-        if input("Quit?") != "":
-            break

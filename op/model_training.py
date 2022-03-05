@@ -138,18 +138,28 @@ def modify_args(args):
     args.weighted_loss = 0.5
     args.dropout_rate = 0.5
     args.include_cov = False
-    # args.stop_epoch = 24
+    args.stop_epoch = 24
     args.output_dim = 128
 
     args.gradient_clip_norm = 1
     args.precision = 32
+    
+    # Image augmentation
+    args.augment_training = True
+    args.augment_probability = 0.5
+    args.normalize = True
+    args.random_rotation = False
+    args.color_jitter = False
+    args.random_gaussian_blur = True
+    args.random_motion_blur = False
+    args.random_noise = False
     """
 
     args.load_hyperparameters = False
     args.pretrained = True
 
     # Choose model
-    args.model = MODEL_TYPES[4]
+    # args.model = MODEL_TYPES[4]
 
     if args.model == "baseline":
         model_name = "Siamese_Baseline"
@@ -172,16 +182,6 @@ def modify_args(args):
 
     args.balance_classes = False
     args.num_workers = 4
-
-    # Image augmentation
-    # args.augment_training = True
-    # args.augment_probability = 0.5
-    # args.normalize = True
-    # args.random_rotation = False
-    # args.color_jitter = False
-    # args.random_gaussian_blur = True
-    # args.random_motion_blur = False
-    # args.random_noise = False
 
     # Test set parameters
     args.test_only = False
@@ -451,7 +451,8 @@ def main(inference: bool = False):
         model_type = hyperparams['model']
         model = instantiate_model(model_type, hyperparams, True, from_baseline=from_baseline)
         test_loaders = [dm.test_dataloader(), dm.st_test_dataloader(), dm.stan_test_dataloader(),
-                        dm.ui_test_dataloader(), dm.chop_test_dataloader()]
+                        # dm.ui_test_dataloader(), dm.chop_test_dataloader()
+                        ]
 
         # Extract embedding/predictions
         result_dicts = extract(test_loaders, model, model_type, which=which,
@@ -464,7 +465,9 @@ def main(inference: bool = False):
         for i in range(len(result_dicts)):
             all_results[filename_map[i]] = result_dicts[i]
 
-        with open(f"{curr_results_dir}/{'pretrained-' * from_baseline}{model_type}(last)-test_output-{which}.json", "w") as f:
+        with open(
+                f"{curr_results_dir}/{'pretrained-' * from_baseline}{model_type}(multi-visit-only)-test_output-{which}.json",
+                "w") as f:
             json.dump(all_results, f, indent=4)
 
     print("Finished.")

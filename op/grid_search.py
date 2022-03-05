@@ -237,7 +237,7 @@ if __name__ == "__main__":
         # 'random_gaussian_blur': True,
         # 'random_motion_blur': [True, False],
         # 'random_noise': [True, False],
-        'model': ["baseline",] # "avg_pred", "conv_pool", "tsm"]
+        'model': ['lstm']  # "baseline", "avg_pred", "conv_pool", "tsm"]
     }
 
     gridSearch = GridSearch(model_type, timestamp, grid_search_dir, metric='auprc')
