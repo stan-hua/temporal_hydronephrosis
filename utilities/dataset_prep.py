@@ -39,7 +39,9 @@ class KidneyDataModule(pl.LightningDataModule):
         self.train_img_dict, self.train_label_dict, self.train_cov_dict, self.train_study_ids = None, None, None, None
         self._train_val_idx_generator = None
 
-        self.test_set, self.st_test_set, self.stan_test_set, self.ui_test_set, self.chop_test_set = None, None, None, None, None
+        self.test_set, self.st_test_set = None, None
+        self.stan_test_set, self.ui_test_set, self.chop_test_set = None, None, None
+        self.prenatal_test_set, self.postnatal_test_set = None, None
 
     def setup(self, stage='fit'):
         args = self.args
@@ -77,32 +79,38 @@ class KidneyDataModule(pl.LightningDataModule):
 
             # Test set
             if not args.train_only:
-                self.test_set = get_data_dicts(test_dict, data_dir=args.data_dir, seq=not args.single_visit,
-                                               last_visit_only=args.test_last_visit)
+                self.test_set = get_data_dicts(test_dict, data_dir=args.data_dir,
+                                               seq=not args.single_visit, last_visit_only=args.test_last_visit)
         else:  # External test sets
             # Silent Trial
             st_test_dict = load_test_dataset(args.json_st_test, data_dir=args.data_dir)
             self.st_test_set = get_data_dicts(st_test_dict, data_dir=args.data_dir, silent_trial=True,
-                                              seq=not args.single_visit,
-                                              last_visit_only=args.test_last_visit)
+                                              seq=not args.single_visit, last_visit_only=args.test_last_visit)
 
             # Stanford
             stan_test_dict = load_test_dataset(args.json_stan_test, data_dir=args.data_dir)
             self.stan_test_set = get_data_dicts(stan_test_dict, data_dir=args.data_dir,
-                                                seq=not args.single_visit,
-                                                last_visit_only=args.test_last_visit)
+                                                seq=not args.single_visit, last_visit_only=args.test_last_visit)
 
             # UIowa
             ui_test_dict = load_test_dataset(args.json_ui_test, data_dir=args.data_dir)
             self.ui_test_set = get_data_dicts(ui_test_dict, data_dir=args.data_dir,
-                                              seq=not args.single_visit,
-                                              last_visit_only=args.test_last_visit)
+                                              seq=not args.single_visit, last_visit_only=args.test_last_visit)
 
             # CHOP
             chop_test_dict = load_test_dataset(args.json_chop_test, data_dir=args.data_dir)
             self.chop_test_set = get_data_dicts(chop_test_dict, data_dir=args.data_dir,
-                                                seq=not args.single_visit,
-                                                last_visit_only=args.test_last_visit)
+                                                seq=not args.single_visit, last_visit_only=args.test_last_visit)
+
+            # Prenatal
+            prenatal_test_dict = load_test_dataset(args.json_prenatal, data_dir=args.data_dir)
+            self.prenatal_test_set = get_data_dicts(prenatal_test_dict, data_dir=args.data_dir,
+                                                    seq=not args.single_visit, last_visit_only=args.test_last_visit)
+
+            # Postnatal
+            postnatal_test_dict = load_test_dataset(args.json_postnatal, data_dir=args.data_dir)
+            self.postnatal_test_set = get_data_dicts(postnatal_test_dict, data_dir=args.data_dir,
+                                                     seq=not args.single_visit, last_visit_only=args.test_last_visit)
 
     def train_dataloader(self):
         train_idx, _ = self._train_val_idx_generator[self.fold]
@@ -164,6 +172,16 @@ class KidneyDataModule(pl.LightningDataModule):
         chop_test_set = KidneyDataset(data_dicts=self.chop_test_set, include_cov=self.args.include_cov)
         chop_test_generator = DataLoader(chop_test_set, **self.val_dataloader_params)
         return chop_test_generator
+
+    def prenatal_test_dataloader(self):
+        prenatal_test_set = KidneyDataset(data_dicts=self.prenatal_test_set, include_cov=self.args.include_cov)
+        prenatal_test_generator = DataLoader(prenatal_test_set, **self.val_dataloader_params)
+        return prenatal_test_generator
+
+    def postnatal_test_dataloader(self):
+        postnatal_test_set = KidneyDataset(data_dicts=self.postnatal_test_set, include_cov=self.args.include_cov)
+        postnatal_test_generator = DataLoader(postnatal_test_set, **self.val_dataloader_params)
+        return postnatal_test_generator
 
 
 # ==DATA LOADING==:
@@ -262,17 +280,18 @@ def load_test_dataset(json_infile, data_dir):
 
 
 def get_data_dicts(in_dict, data_dir, update_num=None, silent_trial=False, last_visit_only=False, seq=False,
-                   include_baseline_date=False):
+                   include_baseline_date=False, check_age=False):
     """Return tuple containing 3 dictionaries of images, labels, covariates and a list of study IDs.
 
     :param in_dict: Dictionary of nested dictionaries, where outermost keys correspond to patient IDs.
     :param data_dir: Path to data directory
-    :param silent_trial: If data is from silent trial, perform specific processing
-    :param update_num: Number to append to patient ID if transformation is applied
+    :param silent_trial: If data is from silent trial, perform specific processing.
+    :param update_num: Number to append to patient ID if transformation is applied.
     :param last_visit_only: If true, only include the last ultrasound visit.
     :param seq: If true, returned dicts will contain sequences (lists) of images and covariates, corresponding to
-        patient's visits
+        patient's visits.
     :param include_baseline_date: If true, include baseline date for each patient.
+    :param check_age: If true, check that age data is valid.
     """
     img_dict = dict()
     label_dict = dict()
@@ -295,22 +314,33 @@ def get_data_dicts(in_dict, data_dir, update_num=None, silent_trial=False, last_
 
                 for us_num in us_nums:
                     try:
-                        if in_dict[study_id][side][us_num]['Age_wks'] in ["NA", None] or \
-                                not {'sag', 'trv'}.issubset(in_dict[study_id][side][us_num].keys()):
+                        if check_age and in_dict[study_id][side][us_num]['Age_wks'] in ["NA", None]:
+                            continue
+                        if not {'sag', 'trv'}.issubset(in_dict[study_id][side][us_num].keys()):
                             continue
                     except KeyError as e:
                         print(study_id, side, us_num, 'Age_wks')
                         print(us_nums)
                         raise e
 
+                    if 'NA' in [in_dict[study_id][side][us_num]['sag'], in_dict[study_id][side][us_num]['trv']]:
+                        continue
+
                     dict_key = study_id + "_" + side
                     dict_key += f"_{us_num}" if not seq else ""
                     dict_key += f"_{update_num}" if update_num is not None else ""
 
                     # Get covariates
-                    machine = in_dict[study_id][side][us_num]['US_machine']
+                    try:
+                        machine = in_dict[study_id][side][us_num]['US_machine']
+                    except KeyError:
+                        machine = None
+                    try:
+                        age_wks = in_dict[study_id][side][us_num]['Age_wks']
+                    except KeyError:
+                        age_wks = None
+
                     sex = in_dict[study_id]['Sex']
-                    age_wks = in_dict[study_id][side][us_num]['Age_wks']
                     bl_date = in_dict[study_id]['BL_date'] if include_baseline_date else None
 
                     # Verify label and covariate age

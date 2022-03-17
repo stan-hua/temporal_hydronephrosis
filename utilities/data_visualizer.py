@@ -1,3 +1,5 @@
+import json
+
 import matplotlib
 import matplotlib.pyplot as plt
 import numpy as np
@@ -6,6 +8,8 @@ import seaborn as sns
 from umap import UMAP
 
 from utilities.dataset_prep import KidneyDataModule
+
+PROJECT_DIR = "C:/Users/Stanley Hua/projects/temporal_hydronephrosis/"
 
 matplotlib.use("Qt5Agg")
 
@@ -107,7 +111,7 @@ def plot_umap(embeds, labels, save_dir=None, plot_name="UMAP"):
                     hue=labels,
                     legend="full",
                     alpha=1,
-                    palette="tab20",
+                    palette=sns.color_palette("husl", len(np.unique(labels))),
                     s=7,
                     linewidth=0)
     plt.legend(bbox_to_anchor=(1, 1), loc="upper left")
@@ -148,26 +152,29 @@ def load_data():
 
 
 def describe_data(data_dicts, plot_title=None, ax=None):
+    """Plots the distribution of the number of repeated visits for each patient."""
     img_dict, label_dict, cov_dict, study_ids = data_dicts
 
     data_viewer = DataViewer(img_dict, label_dict, cov_dict, study_ids)
-    # data_viewer.plot_age(title=plot_title)
-    # plt.show()
+    data_viewer.plot_age(title=plot_title)
+    plt.show()
     data_viewer.plot_num_visits(title=plot_title, ax=ax)
 
     return data_viewer, data_viewer.df_cov, data_viewer.df_examples
 
 
-if __name__ == "__main__":
+def generate_figure():
+    """Used to generate figure for preprint."""
     dm = load_data()
 
     fig, axs = plt.subplots(2, 2, constrained_layout=True)
-
     # train_viewer, df_train_cov, df_train_examples = describe_data(dm.train_dicts, plot_title='Ordered Training Set')
     # val_viewer, df_val_cov, df_val_examples = describe_data(dm.val_dicts, plot_title='Ordered Validation Set')
-    test_viewer, df_test_cov, df_test_examples = describe_data(dm.test_set, plot_title='SickKids Test Set', ax=axs[0][0])
+    test_viewer, df_test_cov, df_test_examples = describe_data(dm.test_set, plot_title='SickKids Test Set',
+                                                               ax=axs[0][0])
 
-    st_viewer, df_st_cov, df_st_examples = describe_data(dm.st_test_set, plot_title='SickKids Silent Trial', ax=axs[0][1])
+    st_viewer, df_st_cov, df_st_examples = describe_data(dm.st_test_set, plot_title='SickKids Silent Trial',
+                                                         ax=axs[0][1])
     stan_viewer, df_stan_cov, df_stan_examples = describe_data(dm.stan_test_set, plot_title='Stanford', ax=axs[1][0])
     # ui_viewer, df_ui_cov, df_ui_examples, ui_fig = describe_data(dm.ui_test_set, plot_title='UIowa Data')
     chop_viewer, df_chop_cov, df_chop_examples = describe_data(dm.chop_test_set, plot_title='CHOP', ax=axs[1][1])
@@ -183,3 +190,36 @@ if __name__ == "__main__":
 
     fig.subplots_adjust(bottom=0.18)
     fig.legend(handles=handles, labels=["Negative", "Positive"], loc=8, ncol=2)
+
+
+def plot_prenatal_vs_postnatal(label_by='surgery'):
+    """Plots 2D embeddings for prenatal images vs. postnatal images under the trained baseline model."""
+    with open(f"{PROJECT_DIR}/results/final/baseline-test_output-embed_postnatal-prenatal.json", "r") as f:
+        embed_dict = json.load(f)
+
+    prenatal_embeds = embed_dict['prenatal']['embed']
+    num_prenatal = len(prenatal_embeds)
+
+    postnatal_embeds = embed_dict['postnatal']['embed']
+    num_postnatal = len(postnatal_embeds)
+
+    print("Num. Prenatal: ", num_prenatal)
+    print("Num. Postnatal: ", num_postnatal)
+
+    embeds = np.concatenate([prenatal_embeds, postnatal_embeds])
+
+    prenatal_ids = [id_[8:].split("_")[0] for id_ in embed_dict['prenatal']['ids']]
+    postnatal_ids = [id_[9:].split("_")[0] for id_ in embed_dict['postnatal']['ids']]
+
+    if label_by == "id":
+        labels = np.concatenate([prenatal_ids, postnatal_ids])
+    elif label_by == 'surgery':
+        labels = np.concatenate([embed_dict['prenatal']['label'], embed_dict['postnatal']['label']])
+    else:
+        labels = (['Prenatal'] * num_prenatal) + (['Postnatal'] * num_postnatal)
+
+    plot_umap(embeds, labels, save_dir=f"{PROJECT_DIR}/figures/", plot_name="Prenatal vs. Postnatal UMAP Embeddings")
+
+
+if __name__ == "__main__":
+    plot_prenatal_vs_postnatal()

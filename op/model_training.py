@@ -67,6 +67,11 @@ def parse_args():
     parser.add_argument("--json_chop_test", default="CHOP_rootfilenames_20220108.json",
                         help="Json file of held-out, retrospective Children's Hospital of Philadelphia data")
 
+    parser.add_argument("--json_prenatal", default="Prenatal_rootfilenames_20220109.json",
+                        help="Json file of SickKids prenatal ultrasounds")
+    parser.add_argument("--json_postnatal", default="Postnatal_rootfilenames_Noage_20220315.json",
+                        help="Json file of SickKids postnatal ultrasounds of those with prenatal scans.")
+
     parser.add_argument("--model", default="baseline",
                         help="Choose model to run from the following: (baseline, conv_pool, lstm, tsm, stgru)")
     parser.add_argument('--epochs', default=100, type=int, help="Number of epochs")
@@ -159,7 +164,7 @@ def modify_args(args):
     args.pretrained = True
 
     # Choose model
-    # args.model = MODEL_TYPES[4]
+    args.model = MODEL_TYPES[2]
 
     if args.model == "baseline":
         model_name = "Siamese_Baseline"
@@ -184,7 +189,7 @@ def modify_args(args):
     args.num_workers = 4
 
     # Test set parameters
-    args.test_only = False
+    args.test_only = True
     args.include_test = True
     args.ordered_split = False
 
@@ -407,7 +412,7 @@ def extract(dataloaders, model, model_type="baseline", which="embed", save_dir=N
 
 
 # Main Methods
-def main(inference: bool = False):
+def main(inference: bool = False, **kwargs):
     """Main method for training, or inference on test set.
 
     :param inference Perform training if false. Otherwise, perform inference using pretrained model and save results.
@@ -445,33 +450,41 @@ def main(inference: bool = False):
         assert args.pretrained
         curr_results_dir = f"{results_dir}/final/"
         from_baseline = False
-        which = ['embed', 'pred'][1]
+
+        assert 'which' in kwargs and kwargs['which'] in ['embed', 'pred']
+        suffix = kwargs['suffix'] if 'suffix' in kwargs else ''
 
         # Get model and dataloaders
         model_type = hyperparams['model']
         model = instantiate_model(model_type, hyperparams, True, from_baseline=from_baseline)
-        test_loaders = [dm.test_dataloader(), dm.st_test_dataloader(), dm.stan_test_dataloader(),
-                        # dm.ui_test_dataloader(), dm.chop_test_dataloader()
-                        ]
+        test_loaders = [
+            # dm.test_dataloader(), dm.st_test_dataloader(), dm.stan_test_dataloader(),
+            # dm.ui_test_dataloader(), dm.chop_test_dataloader(),
+            dm.prenatal_test_dataloader(),
+            dm.postnatal_test_dataloader()
+        ]
+        # test_names = ["SK Test", "SK Silent Trial", "Stanford", "Iowa", "CHOP", "Prenatal"]
+        test_names = ["Prenatal", "Postnatal"]
 
         # Extract embedding/predictions
-        result_dicts = extract(test_loaders, model, model_type, which=which,
-                               dset_name=["SK Test", "SK Silent Trial", "Stanford", "Iowa", "CHOP"],
+        result_dicts = extract(test_loaders, model, model_type, which=kwargs['which'],
+                               dset_name=test_names,
                                save_dir=f"{project_dir}/figures/")
 
         # Store results
-        filename_map = {0: f"sk_test", 1: "st", 2: "stan", 3: "uiowa", 4: "chop"}
+        # filename_map = {0: f"sk_test", 1: "st", 2: "stan", 3: "uiowa", 4: "chop", 5: "prenatal"}
+        filename_map = {0: "prenatal", 1: "postnatal"}
         all_results = {}
         for i in range(len(result_dicts)):
             all_results[filename_map[i]] = result_dicts[i]
 
-        with open(
-                f"{curr_results_dir}/{'pretrained-' * from_baseline}{model_type}(multi-visit-only)-test_output-{which}.json",
-                "w") as f:
+        with open(f"{curr_results_dir}/{'pretrained-' * from_baseline}{model_type}-test_output-{kwargs['which']}{suffix}.json", "w") as f:
             json.dump(all_results, f, indent=4)
 
     print("Finished.")
 
 
 if __name__ == '__main__':
-    main(inference=True)
+    main(inference=True,
+         which="pred",
+         suffix="_postnatal-prenatal")

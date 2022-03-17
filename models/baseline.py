@@ -358,6 +358,7 @@ class SiamNet(pl.LightningModule):
 
         return x.cpu().detach().numpy()
 
+    @torch.no_grad()
     def extract_embeddings(self, dataloader):
         """Extract embeddings, and return labels and IDs for all items in inserted dataloader."""
         embed_lst = []
@@ -377,6 +378,7 @@ class SiamNet(pl.LightningModule):
 
         return embeds, labels, ids
 
+    @torch.no_grad()
     def extract_preds(self, dataloader):
         """Predict samples in dataloader. Return log-probability of positive prediction for every example."""
         preds = []

@@ -213,33 +213,32 @@ if __name__ == "__main__":
     keep_best_weights = False
 
     timestamp = datetime.now().strftime("%Y-%m-%d")
-    # timestamp = '2022-02-05'
     grid_search_dir = f"{project_dir}/results/{model_type}{'_' if (len(model_type) > 0) else ''}grid_search({timestamp})/"
 
     if not os.path.exists(grid_search_dir):
         os.mkdir(grid_search_dir)
 
     search_space = {
-        # 'lr': [1e-3, 1e-5, 1e-4],
-        # "batch_size": [1, 16, 64],
-        # 'adam': [True, False],
-        # 'momentum': [0.8, 0.9],
-        # 'weight_decay': [5e-4, 5e-3],
-        # 'weighted_loss': 0.5,
-        # 'output_dim': [128, 256, 512],
-        # 'dropout_rate': [0, 0.25, 0.5],
-        # 'precision': 16,
-        # 'augment_training': True,
-        # 'augment_probability': 0.5,      # [0.25, 0.5, 0.75],
-        # 'normalize': True,
-        # 'random_rotation': [True, False],
-        # 'color_jitter': [True, False],
-        # 'random_gaussian_blur': True,
-        # 'random_motion_blur': [True, False],
-        # 'random_noise': [True, False],
-        'model': ['lstm']  # "baseline", "avg_pred", "conv_pool", "tsm"]
+        'lr': [1e-3, 1e-5, 1e-4],
+        "batch_size": [1, 16, 64],
+        'adam': [True, False],
+        'momentum': [0.8, 0.9],
+        'weight_decay': [5e-4, 5e-3],
+        'weighted_loss': 0.5,
+        'output_dim': [128, 256, 512],
+        'dropout_rate': [0, 0.25, 0.5],
+        'precision': 16,
+        'augment_training': True,
+        'augment_probability': 0.5,      # [0.25, 0.5, 0.75],
+        'normalize': True,
+        'random_rotation': [True, False],
+        'color_jitter': [True, False],
+        'random_gaussian_blur': True,
+        'random_motion_blur': [True, False],
+        'random_noise': [True, False],
+        'model': ['lstm', "baseline", "avg_pred", "conv_pool", "tsm"]
     }
 
     gridSearch = GridSearch(model_type, timestamp, grid_search_dir, metric='auprc')
     gridSearch.perform_grid_search(search_space, n=12)
-    # gridSearch.save_grid_search_results()
+    gridSearch.save_grid_search_results()

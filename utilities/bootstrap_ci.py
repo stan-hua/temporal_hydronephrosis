@@ -167,17 +167,41 @@ def ensemble(model_names: dict):
     return df_metrics
 
 
-if __name__ == '__main__':
-    # with open("C:\\Users\\Stanley Hua\\SickKids\\Lauren Erdman - HN_Stanley\\Results/NoFinalLayerFineTuneNoCov_v2_TrainOnly_40epochs_bs16_lr0.001_RCFalse_covFalse_OSFalse.json",
-    #           "r") as f:
-    #     results = json.load(f)
-    # uiowa_results = results['ui']['1']['30']
+def prenatal_postnatal_experiment(model_names, filename: str):
+    """Perform comparison of prenatal vs. postnatal inference."""
+    global RESULTS_DIR, TEST_NAMES
 
+    df_results = pd.DataFrame()
+    for model in model_names:
+        with open(f"{RESULTS_DIR}/{model}-test_output-pred_postnatal-prenatal.json", "r") as f:
+            results = json.load(f)
+
+        metrics = bootstrap_results(results)
+        df_metrics = pd.DataFrame(metrics).T.reset_index()
+        df_metrics['Model'] = model_names[model]
+        df_metrics = df_metrics.rename(columns={'index': "Dataset"})
+        df_metrics = df_metrics[["Dataset", "Model", "AUROC", "AUPRC"]]
+
+        df_results = pd.concat([df_results, df_metrics], ignore_index=True)
+
+    df_results['Dataset'] = df_results['Dataset'].astype(
+        pd.api.types.CategoricalDtype(categories=list(TEST_NAMES.values())))
+
+    df_results['Model'] = df_results['Model'].astype(
+        pd.api.types.CategoricalDtype(categories=list(model_names.values())))
+
+    df_results = df_results.sort_values(by=["Dataset", "Model"])
+    df_results.to_csv(f"{RESULTS_DIR}/{filename}.csv", index=False)
+
+
+if __name__ == '__main__':
     TEST_NAMES = {"sk_test": "SickKids Test Set",
                   "st": "SickKids Silent Trial",
                   "stan": "Stanford",
                   "uiowa": "UIowa",
-                  "chop": "CHOP"}
+                  "chop": "CHOP",
+                  "prenatal": "Prenatal",
+                  "postnatal": "Postnatal"}
 
     RESULTS_DIR = "C:/Users/Stanley Hua/projects/temporal_hydronephrosis/results/final/"
 
@@ -202,4 +226,6 @@ if __name__ == '__main__':
     # print("\n Saving only multivisit experiment...")
     # save_results(only_multivisit, "only-multivisit_results(bca)")
 
-    df_ensemble = ensemble(multi_visit_experiment)
+    # df_ensemble = ensemble(multi_visit_experiment)
+    prenatal_postnatal_experiment(model_names={'baseline': 'Baseline', 'conv_pool': 'Conv. Pooling'},
+                                  filename='prenatal_vs_postnatal')
