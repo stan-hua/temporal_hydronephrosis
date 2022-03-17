@@ -133,39 +133,6 @@ def modify_args(args):
     """
     global model_name
 
-    # Model hyperparameters
-    """
-    args.lr = 0.0001
-    args.batch_size = 16
-    args.adam = True
-    args.momentum = 0.9
-    args.weight_decay = 0.005
-    args.weighted_loss = 0.5
-    args.dropout_rate = 0.5
-    args.include_cov = False
-    args.stop_epoch = 24
-    args.output_dim = 128
-
-    args.gradient_clip_norm = 1
-    args.precision = 32
-    
-    # Image augmentation
-    args.augment_training = True
-    args.augment_probability = 0.5
-    args.normalize = True
-    args.random_rotation = False
-    args.color_jitter = False
-    args.random_gaussian_blur = True
-    args.random_motion_blur = False
-    args.random_noise = False
-    """
-
-    args.load_hyperparameters = False
-    args.pretrained = True
-
-    # Choose model
-    args.model = MODEL_TYPES[2]
-
     if args.model == "baseline":
         model_name = "Siamese_Baseline"
     elif args.model == 'baseline_efficientnet':
@@ -184,22 +151,6 @@ def modify_args(args):
         args.test_last_visit = False
         args.accum_grad_batches = args.batch_size
         args.batch_size = 1
-
-    args.balance_classes = False
-    args.num_workers = 4
-
-    # Test set parameters
-    args.test_only = True
-    args.include_test = True
-    args.ordered_split = False
-
-    # Validation set parameters
-    args.include_validation = not args.test_only and False
-    args.cv = args.include_validation and True
-    args.num_folds = 5 if (args.cv and args.include_validation) else 1
-
-    if not args.cv and args.include_validation:
-        args.ordered_validation = True  # train and validation split
 
 
 def get_hyperparameters(args):
