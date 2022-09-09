@@ -1,4 +1,4 @@
-# Temporal HN Project
+# Video-Based Deep Learning for Modeling Ultrasounds over Time
 
 ## Context
 
