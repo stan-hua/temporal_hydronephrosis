@@ -24,7 +24,7 @@ We find no **significant difference** in AUROC/AUPRC between the single-visit ba
 
 ## Conclusion
 
-This evidence suggests that future deployment of the model in the hospital may only need data from a patient's latest visit.
+This evidence suggests that the model is very flexible with respect to a patient's past and current data. Future deployment of the model in the hospital may include using data from any of a patient's past or current ultrasounds.
 
 ```
 ├── models/                    # Moduels for models
