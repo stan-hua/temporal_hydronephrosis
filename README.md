@@ -1,5 +1,10 @@
 # From Single-Visit to Multi-Visit Image-Based Models: Single-Visit Models are Enough to Predict Obstructive Hydronephrosis
 
+## Info
+Paper published and presented at **SIPAIM** (November 2022) in Valparaiso, Chile
+
+**Link to Paper**: https://arxiv.org/pdf/2212.13535.pdf
+
 ## Context
 
 Most image-based models being developed today rely on 2D convolutional architectures (CNNs). These models are trained with the hope that one day, a patient can have a scan/image collected, pass it into the model, and produce a prediction related to some outcome.
