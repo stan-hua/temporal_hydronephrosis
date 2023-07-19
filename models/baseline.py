@@ -2,12 +2,15 @@
 Baseline Siamese 2D CNN model.
 """
 
+# Non-standard libraries
 import numpy as np
 import pytorch_lightning as pl
 import torch
-from torch import nn
 import torchmetrics
+from torch import nn
+from tqdm import tqdm
 
+# Custom libraries
 from utilities.kornia_augmentation import DataAugmentation
 
 
@@ -26,6 +29,8 @@ class SiamNet(pl.LightningModule):
         # Update hyperparameters if given in dictionary
         if model_hyperparams is not None:
             self.save_hyperparameters(model_hyperparams)
+        else:
+            self.save_hyperparameters()
 
         # For image augmentation
         self.augmentation = augmentation
@@ -366,7 +371,7 @@ class SiamNet(pl.LightningModule):
         id_list = []
 
         self.eval()
-        for batch_idx, (data_dict, y_true, id_) in enumerate(dataloader):
+        for batch_idx, (data_dict, y_true, id_) in tqdm(enumerate(dataloader)):
             out = self.forward_embed(data_dict)
             embed_lst.append(out)
             y_list.append(y_true.numpy())
