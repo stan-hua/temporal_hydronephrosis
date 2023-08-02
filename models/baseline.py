@@ -41,9 +41,11 @@ class SiamNet(pl.LightningModule):
         self._metrics = {}
         dsets = ['train', 'val', 'test0', 'test1', 'test2', 'test3', 'test4']
         for dset in dsets:
-            exec(f"self.{dset}_acc = torchmetrics.Accuracy()")
-            exec(f"self.{dset}_auroc = torchmetrics.AUROC(num_classes=1, average='micro')")
-            exec(f"self.{dset}_auprc= torchmetrics.AveragePrecision(num_classes=1)")
+            exec(f"self.{dset}_acc = torchmetrics.Accuracy(task='binary')")
+            exec(f"""self.{dset}_auroc = torchmetrics.AUROC(
+                task='binary', num_classes=1, average='micro')""")
+            exec(f"""self.{dset}_auprc= torchmetrics.AveragePrecision(
+                task='binary', num_classes=1)""")
 
         # CONVOLUTIONAL BLOCKS
         if self.updated_naming:
