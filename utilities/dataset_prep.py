@@ -586,39 +586,52 @@ def crop_image(image, random_crop=False):
     return cropped_image
 
 
-def special_ST_preprocessing(img_file, output_dim=256):
-    """Special image preprocessing for Silent Trial data."""
-    if "preprocessed" in img_file:
-        my_img = process_input_image(img_file)
+def special_ST_preprocessing(path, output_dim=256):
+    """
+    Load and preprocess image at file path.
+
+    Parameters
+    ----------
+    path : str
+        Path to image
+    output_dim : int, optional
+        Width/Height of expected image, by default 256
+
+    Returns
+    -------
+    np.array
+        Preprocessed image
+    """
+    if "preprocessed" in path:
+        my_img = process_input_image(path)
     else:
-        img_name = img_file.split('/')[len(img_file.split('/')) - 1]
-        img_folder = "/".join(img_file.split('/')[:-2])
+        img_name = os.path.basename(path)
+        img_folder = os.path.dirname(path)
         if not os.path.exists(img_folder + "/Preprocessed/"):
             os.makedirs(img_folder + "/Preprocessed/")
-        out_img_filename = img_folder + "/Preprocessed/" + img_name.split('.')[0] + "-preprocessed.png"
+        save_path = img_folder + "/Preprocessed/" + img_name.split('.')[0] + "-preprocessed.png"
 
-        if not os.path.exists(out_img_filename):
-            image = np.array(Image.open(img_file).convert('L'))
+        if not os.path.exists(save_path):
+            image = np.array(Image.open(path).convert('L'))
             image_grey = img_as_float(image)
             cropped_img = image_grey
             resized_img = transform.resize(cropped_img, output_shape=(output_dim, output_dim))
             my_img = set_contrast(resized_img)  # ultimately add contrast variable
-            Image.fromarray(my_img * 255).convert('RGB').save(out_img_filename)
-        my_img = np.array(Image.open(out_img_filename).convert('L'))
+            Image.fromarray(my_img * 255).convert('RGB').save(save_path)
+        my_img = np.array(Image.open(save_path).convert('L'))
     return my_img
 
 
-def process_input_image(img_file, crop=None, random_crop=None):
+def process_input_image(path, crop=None, random_crop=None):
     """Processes image: crop, convert to greyscale and resize
     
-    :param img_file: path to image
+    :param path: path to image
     :param crop: crop image if true
     :param random_crop: randomly crop
     :return: formatted image
     """
-    fit_img = np.array(Image.open(img_file).convert('L'))
+    fit_img = np.array(Image.open(path).convert('L'))
     if fit_img.shape[0] != 256 or fit_img.shape[1] != 256:
-        # print(img_file)
-        fit_img = special_ST_preprocessing(img_file)
+        fit_img = special_ST_preprocessing(path)
 
     return fit_img

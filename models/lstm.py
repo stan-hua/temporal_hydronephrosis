@@ -41,6 +41,7 @@ class SiamNetLSTM(SiamNet):
                                                  batch_first=True,
                                                  num_layers=self.hparams.n_lstm_layers,
                                                  bidirectional=self.hparams.bidirectional))
+                                                 
 
     def forward(self, data):
         """Accepts sequence of dual view images. Extracts penultimate layer embeddings for each dual view, then

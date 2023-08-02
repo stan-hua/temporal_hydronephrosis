@@ -391,7 +391,7 @@ class SiamNet(pl.LightningModule):
         id_list = []
 
         self.eval()
-        for batch_idx, (data_dict, y_true, id_) in enumerate(dataloader):
+        for batch_idx, (data_dict, y_true, id_) in tqdm(enumerate(dataloader)):
             out = self.forward(data_dict)
             preds.append(out[:, 1].cpu().detach().numpy())  # get probability for positive prediction
             y_list.append(y_true.numpy())
